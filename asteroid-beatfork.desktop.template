@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Categories=Applications;
+Exec=asteroid-beatfork
+Icon=ios-musical-note
+X-Asteroid-Center-Color=#119DA4
+X-Asteroid-Outer-Color=#090B0C
