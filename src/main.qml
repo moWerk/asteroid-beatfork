@@ -49,7 +49,14 @@ Application {
     readonly property int flashDuration: 200
     readonly property int sessionBreakMs: 1500  // one beat at 40 BPM
 
-    readonly property var pageTitles: ["Detect BPM", "Metronome", "Tuning Fork"]
+    readonly property var pageTitles: [
+        //% "Detect BPM"
+        qsTrId("id-detect-bpm"),
+        //% "Metronome"
+        qsTrId("id-metronome"),
+        //% "Tuning Fork"
+        qsTrId("id-tuning-fork")
+    ]
 
     ListView {
         id: pageView
@@ -122,7 +129,8 @@ Application {
                     anchors.horizontalCenter: parent.horizontalCenter
                     anchors.bottomMargin: Dims.h(3)
                     z: 1
-                    text: "Tap"
+                    //% "Tap"
+                    text: qsTrId("id-tap")
                     opacity: pulseSmall.opacity
                     visible: page0.lastTap === 0
                 }
@@ -363,7 +371,8 @@ Application {
                     Label {
                         id: freqLabel
                         anchors.centerIn: parent
-                        text: freqConfig.value + " Hz"
+                        //% "Hz"
+                        text: freqConfig.value + " " + qsTrId("id-hz")
                         font.pixelSize: Dims.l(14)
                     }
 
@@ -371,7 +380,8 @@ Application {
                         anchors.top: freqLabel.bottom
                         anchors.horizontalCenter: parent.horizontalCenter
                         anchors.topMargin: Dims.h(2)
-                        text: "Tap to change"
+                        //% "Tap to change"
+                        text: qsTrId("id-tap-to-change")
                         font.pixelSize: Dims.l(7)
                         opacity: 0.6
                     }
@@ -406,7 +416,8 @@ Application {
                         anchors.top: forkLabel.bottom
                         anchors.horizontalCenter: forkLabel.horizontalCenter
                         anchors.topMargin: Dims.h(2)
-                        text: "Hold to loop"
+                        //% "Hold to loop"
+                        text: qsTrId("id-hold-to-loop")
                         font.pixelSize: Dims.l(7)
                         opacity: 0.6
                     }
