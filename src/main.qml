@@ -83,17 +83,17 @@ Application {
                 Rectangle {
                     id: pulseSmall
                     anchors.centerIn: parent
-                    width: Dims.l(57)
+                    width: Dims.l(66)
                     height: width
                     radius: width / 2
                     color: "#ff69b4"
-                    opacity: 0.1
+                    opacity: 0.2
                     z: 0
 
                     SequentialAnimation {
                         id: tapPulse
-                        NumberAnimation { target: pulseSmall; property: "opacity"; to: 1.0; duration: 60;  easing.type: Easing.OutQuad }
-                        NumberAnimation { target: pulseSmall; property: "opacity"; to: 0.1; duration: 140; easing.type: Easing.InQuad }
+                        NumberAnimation { target: pulseSmall; property: "opacity"; to: 0.8; duration: 60;  easing.type: Easing.OutQuad }
+                        NumberAnimation { target: pulseSmall; property: "opacity"; to: 0.2; duration: 140; easing.type: Easing.InQuad }
                     }
 
                     SequentialAnimation {
@@ -117,9 +117,9 @@ Application {
                     anchors.centerIn: parent
                     z: 1
                     text: bpmConfig.value
-                    font.pixelSize: Dims.l(36)
+                    font.pixelSize: Dims.l(38)
                     font.family: "Noto Sans Condensed"
-                    font.weight: Font.Bold
+                    font.weight: Font.Medium
                     color: "#ffffff"
                 }
 
@@ -127,7 +127,7 @@ Application {
                 Label {
                     anchors.bottom: pulseSmall.bottom
                     anchors.horizontalCenter: parent.horizontalCenter
-                    anchors.bottomMargin: Dims.h(3)
+                    anchors.bottomMargin: Dims.h(4)
                     z: 1
                     //% "Tap"
                     text: qsTrId("id-tap")
@@ -214,16 +214,76 @@ Application {
                     }
                 }
 
+                // ── Sound toggle button (left)
+                Item {
+                    anchors.left: parent.left
+                    anchors.leftMargin: Dims.w(12)
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: Dims.l(20)
+                    height: Dims.l(20)
+                    z: 2
+
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: width / 2
+                        color: "#000000"
+                        opacity: page1.soundActive ? 0.7 : 0.2
+                    }
+
+                    Icon {
+                        anchors.centerIn: parent
+                        width: Dims.l(12)
+                        height: Dims.l(12)
+                        name: "ios-musical-note"
+                        opacity: page1.soundActive ? 1.0 : 0.7
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: page1.soundActive = !page1.soundActive
+                    }
+                }
+
+                // ── Haptic toggle button (right)
+                Item {
+                    anchors.right: parent.right
+                    anchors.rightMargin: Dims.w(12)
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: Dims.l(20)
+                    height: Dims.l(20)
+                    z: 2
+
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: width / 2
+                        color: "#000000"
+                        opacity: page1.hapticActive ? 0.7 : 0.2
+                    }
+
+                    Icon {
+                        anchors.centerIn: parent
+                        width: Dims.l(12)
+                        height: Dims.l(12)
+                        name: "ios-watch-vibrating"
+                        opacity: page1.hapticActive ? 1.0 : 0.7
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: page1.hapticActive = !page1.hapticActive
+                    }
+                }
+
                 // ── Full-screen pulse circle
                 Rectangle {
                     id: pulseBig
                     anchors.centerIn: parent
-                    width: Dims.l(90)
+                    width: Dims.l(100)
                     height: width
                     radius: width / 2
                     color: "#ff69b4"
                     opacity: 0.1
-                    z: 0
+                    z: 10
 
                     SequentialAnimation on opacity {
                         id: metroAnim
@@ -279,66 +339,6 @@ Application {
                     }
                 }
 
-                // ── Sound toggle button (left)
-                Item {
-                    anchors.left: parent.left
-                    anchors.leftMargin: Dims.w(12)
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: Dims.l(20)
-                    height: Dims.l(20)
-                    z: 2
-
-                    Rectangle {
-                        anchors.fill: parent
-                        radius: width / 2
-                        color: "#000000"
-                        opacity: page1.soundActive ? 0.7 : 0.2
-                    }
-
-                    Icon {
-                        anchors.centerIn: parent
-                        width: Dims.l(12)
-                        height: Dims.l(12)
-                        name: "ios-musical-notes"
-                        opacity: page1.soundActive ? 1.0 : 0.7
-                    }
-
-                    MouseArea {
-                        anchors.fill: parent
-                        onClicked: page1.soundActive = !page1.soundActive
-                    }
-                }
-
-                // ── Haptic toggle button (right) ──────────────────────────────
-                Item {
-                    anchors.right: parent.right
-                    anchors.rightMargin: Dims.w(12)
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: Dims.l(20)
-                    height: Dims.l(20)
-                    z: 2
-
-                    Rectangle {
-                        anchors.fill: parent
-                        radius: width / 2
-                        color: "#000000"
-                        opacity: page1.hapticActive ? 0.7 : 0.2
-                    }
-
-                    Icon {
-                        anchors.centerIn: parent
-                        width: Dims.l(12)
-                        height: Dims.l(12)
-                        name: "ios-watch-vibrating"
-                        opacity: page1.hapticActive ? 1.0 : 0.7
-                    }
-
-                    MouseArea {
-                        anchors.fill: parent
-                        onClicked: page1.hapticActive = !page1.hapticActive
-                    }
-                }
-
                 Component.onCompleted: {
                     pauseBig.duration = Math.max(0, 60000 / bpmConfig.value - root.flashDuration)
                     metroAnim.start()
@@ -365,7 +365,7 @@ Application {
                     anchors.top: parent.top
                     anchors.left: parent.left
                     anchors.right: parent.right
-                    anchors.topMargin: Dims.h(20)
+                    anchors.topMargin: Dims.h(16)
                     height: parent.height * 0.5 - Dims.h(20)
 
                     Label {
@@ -379,10 +379,10 @@ Application {
                     Label {
                         anchors.top: freqLabel.bottom
                         anchors.horizontalCenter: parent.horizontalCenter
-                        anchors.topMargin: Dims.h(2)
+                        anchors.topMargin: Dims.h(-2)
                         //% "Tap to change"
                         text: qsTrId("id-tap-to-change")
-                        font.pixelSize: Dims.l(7)
+                        font.pixelSize: Dims.l(6)
                         opacity: 0.6
                     }
 
@@ -402,23 +402,23 @@ Application {
                     anchors.bottom: parent.bottom
                     anchors.left: parent.left
                     anchors.right: parent.right
-                    anchors.bottomMargin: Dims.h(10)
+                    anchors.bottomMargin: Dims.h(16)
                     height: parent.height * 0.5 - Dims.h(10)
 
-                    Label {
+                    Icon {
                         id: forkLabel
                         anchors.centerIn: parent
-                        text: "\u2442"
-                        font.pixelSize: Dims.l(28)
+                        width: Dims.l(24)
+                        height: Dims.l(24)
+                        name: "ios-musical-note"
                     }
 
                     Label {
                         anchors.top: forkLabel.bottom
                         anchors.horizontalCenter: forkLabel.horizontalCenter
-                        anchors.topMargin: Dims.h(2)
                         //% "Hold to loop"
                         text: qsTrId("id-hold-to-loop")
-                        font.pixelSize: Dims.l(7)
+                        font.pixelSize: Dims.l(6)
                         opacity: 0.6
                     }
 
