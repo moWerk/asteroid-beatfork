@@ -196,8 +196,15 @@ Application {
                     event: "press"
                 }
 
-                property bool soundActive:  false
-                property bool hapticActive: false
+                property bool soundActive:   false
+                property bool hapticActive:  false
+                property bool pulseVisible:  true
+                property int  colorIndex:    0
+
+                readonly property var pulseColors: [
+                    "#FF69B4", "#C5FCE4", "#FF4B0A",
+                    "#FFEC1F", "#0ABAFF", "#98D831"
+                ]
 
                 // ── Spinner debounce
                 property int pendingBpm: -1
@@ -214,11 +221,81 @@ Application {
                     }
                 }
 
-                // ── Sound toggle button (left)
+                // ── Upper-left: pulse visibility toggle
                 Item {
                     anchors.left: parent.left
                     anchors.leftMargin: Dims.w(12)
                     anchors.verticalCenter: parent.verticalCenter
+                    anchors.verticalCenterOffset: -Dims.h(25)
+                    width: Dims.l(20)
+                    height: Dims.l(20)
+                    z: 2
+
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: width / 2
+                        color: "#000000"
+                        opacity: page1.pulseVisible ? 0.7 : 0.2
+                    }
+
+                    Icon {
+                        anchors.centerIn: parent
+                        width: Dims.l(12)
+                        height: Dims.l(12)
+                        name: page1.pulseVisible ? "ios-watch-aod-on" : "ios-watch-aod-off"
+                        opacity: page1.pulseVisible ? 1.0 : 0.7
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: {
+                            page1.pulseVisible = !page1.pulseVisible
+                            if (page1.pulseVisible) {
+                                metroAnim.restart()
+                            } else {
+                                metroAnim.stop()
+                                pulseBig.opacity = 0.1
+                            }
+                        }
+                    }
+                }
+
+                // ── Upper-right: pulse color cycle
+                // Background shows the NEXT color to hint what cycling will do;
+                // opacity tracks pulseVisible so it dims when animation is off.
+                Item {
+                    anchors.right: parent.right
+                    anchors.rightMargin: Dims.w(12)
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.verticalCenterOffset: -Dims.h(25)
+                    width: Dims.l(20)
+                    height: Dims.l(20)
+                    z: 2
+
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: width / 2
+                        color: page1.pulseColors[page1.colorIndex]
+                        opacity: page1.pulseVisible ? 0.7 : 0.2
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: {
+                            page1.colorIndex = (page1.colorIndex + 1) % page1.pulseColors.length
+                            var c = page1.pulseColors[page1.colorIndex]
+                            pulseBig.color   = c
+                            pulseSmall.color = c
+                        }
+                    }
+                }
+
+                // ── Lower-left: sound toggle
+                Item {
+                    anchors.left: parent.left
+                    anchors.leftMargin: Dims.w(12)
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.verticalCenterOffset: Dims.h(25)
                     width: Dims.l(20)
                     height: Dims.l(20)
                     z: 2
@@ -244,11 +321,12 @@ Application {
                     }
                 }
 
-                // ── Haptic toggle button (right)
+                // ── Lower-right: haptic toggle
                 Item {
                     anchors.right: parent.right
                     anchors.rightMargin: Dims.w(12)
                     anchors.verticalCenter: parent.verticalCenter
+                    anchors.verticalCenterOffset: Dims.h(25)
                     width: Dims.l(20)
                     height: Dims.l(20)
                     z: 2
@@ -281,7 +359,7 @@ Application {
                     width: Dims.l(100)
                     height: width
                     radius: width / 2
-                    color: "#ff69b4"
+                    color: page1.pulseColors[page1.colorIndex]
                     opacity: 0.1
                     z: 10
 
@@ -344,8 +422,10 @@ Application {
                     target: pageView
                     function onCurrentIndexChanged() {
                         if (pageView.currentIndex === 1) {
-                            pauseBig.duration = Math.max(0, 60000 / bpmConfig.value - root.flashDuration)
-                            metroAnim.restart()
+                            if (page1.pulseVisible) {
+                                pauseBig.duration = Math.max(0, 60000 / bpmConfig.value - root.flashDuration)
+                                metroAnim.restart()
+                            }
                         } else {
                             metroAnim.stop()
                             pulseBig.opacity = 0.1
