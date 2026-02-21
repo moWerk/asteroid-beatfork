@@ -333,15 +333,28 @@ Application {
                 Connections {
                     target: bpmConfig
                     function onValueChanged() {
-                        metroAnim.stop()
-                        pauseBig.duration = Math.max(0, 60000 / bpmConfig.value - root.flashDuration)
-                        metroAnim.restart()
+                        if (pageView.currentIndex !== 1) return
+                            metroAnim.stop()
+                            pauseBig.duration = Math.max(0, 60000 / bpmConfig.value - root.flashDuration)
+                            metroAnim.restart()
+                    }
+                }
+
+                Connections {
+                    target: pageView
+                    function onCurrentIndexChanged() {
+                        if (pageView.currentIndex === 1) {
+                            pauseBig.duration = Math.max(0, 60000 / bpmConfig.value - root.flashDuration)
+                            metroAnim.restart()
+                        } else {
+                            metroAnim.stop()
+                            pulseBig.opacity = 0.1
+                        }
                     }
                 }
 
                 Component.onCompleted: {
                     pauseBig.duration = Math.max(0, 60000 / bpmConfig.value - root.flashDuration)
-                    metroAnim.start()
                 }
             }
 
