@@ -86,7 +86,7 @@ Application {
                     width: Dims.l(66)
                     height: width
                     radius: width / 2
-                    color: "#ff69b4"
+                    color: page1.pulseColors[page1.colorIndex]
                     opacity: 0.2
                     z: 0
 
@@ -261,8 +261,6 @@ Application {
                 }
 
                 // ── Upper-right: pulse color cycle
-                // Background shows the NEXT color to hint what cycling will do;
-                // opacity tracks pulseVisible so it dims when animation is off.
                 Item {
                     anchors.right: parent.right
                     anchors.rightMargin: Dims.w(12)
@@ -275,8 +273,17 @@ Application {
                     Rectangle {
                         anchors.fill: parent
                         radius: width / 2
-                        color: page1.pulseColors[page1.colorIndex]
+                        color: "#000000"
                         opacity: page1.pulseVisible ? 0.7 : 0.2
+                    }
+
+                    Rectangle {
+                        anchors.centerIn: parent
+                        width: Dims.l(7)
+                        height: Dims.l(7)
+                        radius: width / 2
+                        color: page1.pulseColors[page1.colorIndex]
+                        opacity: page1.pulseVisible ? 1.0 : 0.7
                     }
 
                     MouseArea {
@@ -361,7 +368,7 @@ Application {
                     radius: width / 2
                     color: page1.pulseColors[page1.colorIndex]
                     opacity: 0.1
-                    z: 10
+                    z: metroAnim.running ? 11 : 0
 
                     SequentialAnimation on opacity {
                         id: metroAnim
