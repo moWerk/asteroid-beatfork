@@ -440,13 +440,17 @@ Application {
                 anchors.fill: parent
                 visible: index === 2
 
-                SoundEffect { id: tone; volume: 1.0 }
+                SoundEffect {
+                    id: tone
+                    volume: 1.0
+                }
 
+                // Single-play auto-stop after 1 s
                 Timer {
-                    id: toneLoop
-                    interval: 3000
-                    repeat:   true
-                    onTriggered: tone.play()
+                    id: singlePlayStop
+                    interval: 1000
+                    repeat:   false
+                    onTriggered: tone.stop()
                 }
 
                 // Upper half: frequency display, tap to advance carousel.
@@ -463,6 +467,18 @@ Application {
                         //% "Hz"
                         text:           freqConfig.value + " " + qsTrId("id-hz")
                         font.pixelSize: Dims.l(14)
+                        opacity: 1.0
+
+                        // Gentle opacity pulse while loop is playing —
+                        // visible indicator when finger covers lower half
+                        SequentialAnimation {
+                            id: loopIndicator
+                            running:  tone.playing && tone.loops === SoundEffect.Infinite
+                            loops:    Animation.Infinite
+                            NumberAnimation { target: freqLabel; property: "opacity"; to: 0.6; duration: 600; easing.type: Easing.InOutSine }
+                            NumberAnimation { target: freqLabel; property: "opacity"; to: 1.0; duration: 600; easing.type: Easing.InOutSine }
+                            onRunningChanged: if (!running) freqLabel.opacity = 1.0
+                        }
                     }
 
                     Label {
@@ -471,13 +487,15 @@ Application {
                         anchors.topMargin:        Dims.h(-2)
                         //% "Tap to change"
                         text:           qsTrId("id-tap-to-change")
-                        font.pixelSize: Dims.l(6)
+                        font.pixelSize: Dims.l(5)
                         opacity: 0.6
                     }
 
                     MouseArea {
                         anchors.fill: parent
                         onClicked: {
+                            singlePlayStop.stop()
+                            tone.stop()
                             var idx = root.freqModel.indexOf(freqConfig.value)
                             freqConfig.value = root.freqModel[(idx + 1) % root.freqModel.length]
                             tone.source = "file:///usr/share/sounds/" + freqConfig.value + "hz.wav"
@@ -485,7 +503,7 @@ Application {
                     }
                 }
 
-                // Lower half: fork icon, tap to play / hold to loop.
+                // Lower half: play button — tap to play 1s preview, hold for continuous tone.
                 Item {
                     anchors.bottom:       parent.bottom
                     anchors.left:         parent.left
@@ -493,34 +511,97 @@ Application {
                     anchors.bottomMargin: Dims.h(16)
                     height: parent.height * 0.5 - Dims.h(10)
 
-                    Icon {
-                        id: forkLabel
+                    Item {
+                        id: forkButton
                         anchors.centerIn: parent
-                        width: Dims.l(24); height: Dims.l(24)
-                        name: "ios-musical-note"
+                        width:  Dims.l(30)
+                        height: Dims.l(30)
+
+                        Rectangle {
+                            id: forkBg
+                            anchors.fill: parent
+                            radius:  width / 2
+                            color:   tone.playing ? root.pulseColor : "#000000"
+                            opacity: 0.7
+
+                            Behavior on color {
+                                ColorAnimation { duration: 150 }
+                            }
+
+                            SequentialAnimation {
+                                id: idleBreath
+                                running:  !tone.playing
+                                loops:    Animation.Infinite
+                                NumberAnimation { target: forkBg; property: "opacity"; to: 0.35; duration: 900; easing.type: Easing.InOutSine }
+                                NumberAnimation { target: forkBg; property: "opacity"; to: 0.7;  duration: 900; easing.type: Easing.InOutSine }
+                            }
+
+                            SequentialAnimation {
+                                id: playingPulse
+                                running: false
+                                NumberAnimation { target: forkBg; property: "opacity"; to: 1.0; duration: 80;  easing.type: Easing.OutQuad }
+                                NumberAnimation { target: forkBg; property: "opacity"; to: 0.7; duration: 220; easing.type: Easing.InQuad }
+                            }
+                        }
+
+                        Icon {
+                            anchors.centerIn: parent
+                            width:  Dims.l(18)
+                            height: Dims.l(18)
+                            name:   "ios-musical-note"
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            property bool holdActive: false
+
+                            onClicked: {
+                                if (holdActive) {
+                                    holdActive = false
+                                    return
+                                }
+                                if (tone.playing) {
+                                    singlePlayStop.stop()
+                                    tone.stop()
+                                } else {
+                                    tone.loops = 1
+                                    tone.play()
+                                    playingPulse.restart()
+                                    singlePlayStop.restart()
+                                }
+                            }
+
+                            onPressAndHold: {
+                                holdActive = true
+                                singlePlayStop.stop()
+                                tone.loops = SoundEffect.Infinite
+                                if (!tone.playing) tone.play()
+                                    playingPulse.restart()
+                            }
+
+                            onReleased: {
+                                if (holdActive) {
+                                    holdActive = false
+                                    tone.stop()
+                                }
+                            }
+                        }
                     }
 
                     Label {
-                        anchors.top:              forkLabel.bottom
-                        anchors.horizontalCenter: forkLabel.horizontalCenter
+                        anchors.top:              forkButton.bottom
+                        anchors.horizontalCenter: forkButton.horizontalCenter
+                        anchors.topMargin:        Dims.h(2)
                         //% "Hold to loop"
-                        text:           qsTrId("id-hold-to-loop")
+                        text:           tone.playing ? "" : qsTrId("id-hold-to-loop")
                         font.pixelSize: Dims.l(6)
                         opacity: 0.6
                     }
-
-                    MouseArea {
-                        anchors.fill: parent
-                        onClicked: tone.play()
-                        onPressAndHold: {
-                            tone.play()
-                            toneLoop.start()
-                        }
-                        onReleased: toneLoop.stop()
-                    }
                 }
 
-                Component.onCompleted: tone.source = "file:///usr/share/sounds/" + freqConfig.value + "hz.wav"
+                Component.onCompleted: {
+                    tone.source = "file:///usr/share/sounds/" + freqConfig.value + "hz.wav"
+                }
             }
         }
     }
