@@ -26,7 +26,7 @@
     <message id="id-hz">
         <location filename="../src/main.qml" line="375"/>
         <source>Hz</source>
-        <translation></translation>
+        <translation>Hz</translation>
     </message>
     <message id="id-tap-to-change">
         <location filename="../src/main.qml" line="384"/>
