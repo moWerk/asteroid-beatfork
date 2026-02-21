@@ -30,24 +30,35 @@ Application {
     anchors.fill: parent
 
     centerColor: "#119DA4"
-    outerColor: "#090B0C"
+    outerColor:  "#090B0C"
 
-    ConfigurationValue { id: bpmConfig;  key: "/asteroid/apps/beatfork/bpm";  defaultValue: 120 }
-    ConfigurationValue { id: freqConfig; key: "/asteroid/apps/beatfork/freq"; defaultValue: 440 }
+    // ── Persisted config ──────────────────────────────────────────────────────
+    ConfigurationValue { id: bpmConfig;   key: "/asteroid/apps/beatfork/bpm";        defaultValue: 120 }
+    ConfigurationValue { id: freqConfig;  key: "/asteroid/apps/beatfork/freq";       defaultValue: 440 }
+    ConfigurationValue { id: colorConfig; key: "/asteroid/apps/beatfork/colorIndex"; defaultValue: 0   }
 
-    property var freqModel: [392, 415, 432, 440, 442, 444, 452]
+    // ── BPM / model constants ─────────────────────────────────────────────────
+    readonly property int bpmMin:         40
+    readonly property int bpmMax:         208
+    readonly property int bpmModelCount:  bpmMax - bpmMin + 1  // 169
+    readonly property int flashDuration:  200
+    readonly property int sessionBreakMs: 1500  // one beat at 40 BPM
 
     property var bpmModel: {
         var arr = []
         for (var i = root.bpmMin; i <= root.bpmMax; ++i) arr.push(i)
             return arr
     }
-    readonly property int bpmMin: 40
-    readonly property int bpmMax: 208
-    readonly property int bpmModelCount: bpmMax - bpmMin + 1  // 169
 
-    readonly property int flashDuration: 200
-    readonly property int sessionBreakMs: 1500  // one beat at 40 BPM
+    property var freqModel: [392, 415, 432, 440, 442, 444, 452]
+
+    readonly property var pulseColors: [
+        "#FF69B4", "#C5FCE4", "#FF4B0A",
+        "#FFEC1F", "#0ABAFF", "#98D831"
+    ]
+
+    // All pages bind to this — updates reactively when colorConfig changes.
+    readonly property string pulseColor: pulseColors[colorConfig.value]
 
     readonly property var pageTitles: [
         //% "Detect BPM"
@@ -58,79 +69,147 @@ Application {
         qsTrId("id-tuning-fork")
     ]
 
+    // ── Page 1 state — lives at root to survive delegate recycling ────────────
+    QtObject {
+        id: page1State
+        property bool soundActive:  false
+        property bool hapticActive: false
+        property bool pulseVisible: true
+        property int  pendingBpm:   -1
+    }
+
+    // ── Audio / haptics — root-level, always loaded ───────────────────────────
+    SoundEffect {
+        id: tickSound
+        source: "file:///usr/share/sounds/tick.wav"
+        volume: 1.0
+    }
+
+    NonGraphicalFeedback {
+        id: hapticFeedback
+        event: "press"
+    }
+
+    // ── Master beat timer ─────────────────────────────────────────────────────
+    // Single source of truth for the beat. Survives page navigation.
+    // All visual and audio subscribers are driven from beatFlash().
+    Timer {
+        id: beatTimer
+        interval:         Math.round(60000 / bpmConfig.value)
+        repeat:           true
+        running:          true
+        triggeredOnStart: false
+        onTriggered:      root.beatFlash()
+    }
+
+    // Restart with correct interval whenever BPM changes.
+    Connections {
+        target: bpmConfig
+        function onValueChanged() {
+            beatTimer.interval = Math.round(60000 / bpmConfig.value)
+            beatTimer.restart()
+        }
+    }
+
+    // ── Spinner debounce — root-level, shared ─────────────────────────────────
+    Timer {
+        id: spinnerDebounce
+        interval: 1000
+        repeat:   false
+        onTriggered: {
+            if (page1State.pendingBpm >= root.bpmMin) {
+                bpmConfig.value       = page1State.pendingBpm
+                page1State.pendingBpm = -1
+            }
+        }
+    }
+
+    // ── Beat dispatcher ───────────────────────────────────────────────────────
+    // Each subscriber checks its own guard. Adding new indicators is additive.
+    // Animations live inside delegates and cannot be called from root scope
+    // directly — they may not exist if the delegate isn't instantiated.
+    // Emit a signal instead; each delegate subscribes locally.
+    signal beat()
+
+    function beatFlash() {
+        root.beat()
+        if (page1State.soundActive)  tickSound.play()
+            if (page1State.hapticActive) hapticFeedback.play()
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     ListView {
         id: pageView
         anchors.fill: parent
-        orientation: ListView.Horizontal
-        snapMode: ListView.SnapOneItem
+        orientation:        ListView.Horizontal
+        snapMode:           ListView.SnapOneItem
         highlightRangeMode: ListView.StrictlyEnforceRange
-        boundsBehavior: Flickable.StopAtBounds
+        boundsBehavior:     Flickable.StopAtBounds
         model: 3
 
         delegate: Item {
-            width: pageView.width
+            width:  pageView.width
             height: pageView.height
 
-            // PAGE 0 ── BPM Tap + pulsing circle behind BPM display
+            // PAGE 0 ── Detect BPM ────────────────────────────────────────────
             Item {
                 id: page0
                 anchors.fill: parent
                 visible: index === 0
 
-                property real lastTap: 0
+                property real lastTap:   0
                 property var  intervals: []
 
                 Rectangle {
                     id: pulseSmall
                     anchors.centerIn: parent
-                    width: Dims.l(66)
-                    height: width
-                    radius: width / 2
-                    color: page1.pulseColors[page1.colorIndex]
-                    opacity: 0.2
+                    width:   Dims.l(66)
+                    height:  width
+                    radius:  width / 2
+                    color:   root.pulseColor   // reactive to colorConfig
+                    opacity: 0.1
                     z: 0
 
+                    // Tap flash — immediate user feedback on each tap
                     SequentialAnimation {
                         id: tapPulse
-                        NumberAnimation { target: pulseSmall; property: "opacity"; to: 0.8; duration: 60;  easing.type: Easing.OutQuad }
-                        NumberAnimation { target: pulseSmall; property: "opacity"; to: 0.2; duration: 140; easing.type: Easing.InQuad }
-                    }
-
-                    SequentialAnimation {
-                        id: timedPulse
-                        running: false
-                        loops: Animation.Infinite
-
-                        NumberAnimation { target: pulseSmall; property: "opacity"; to: 1.0; duration: 60;  easing.type: Easing.OutQuad }
+                        NumberAnimation { target: pulseSmall; property: "opacity"; to: 0.7; duration: 60;  easing.type: Easing.OutQuad }
                         NumberAnimation { target: pulseSmall; property: "opacity"; to: 0.1; duration: 140; easing.type: Easing.InQuad }
-                        PauseAnimation  { id: pauseSmall; duration: 400 }
                     }
 
-                    function startAuto(beatMs) {
-                        timedPulse.stop()
-                        pauseSmall.duration = Math.max(0, beatMs - root.flashDuration)
-                        timedPulse.restart()
+                    // Beat flash — driven by root.beat() signal
+                    SequentialAnimation {
+                        id: pulseSmallAnim
+                        NumberAnimation { target: pulseSmall; property: "opacity"; to: 0.7; duration: 60;  easing.type: Easing.OutQuad }
+                        NumberAnimation { target: pulseSmall; property: "opacity"; to: 0.1; duration: 140; easing.type: Easing.InQuad }
+                    }
+
+                    Connections {
+                        target: root
+                        function onBeat() { pulseSmallAnim.restart() }
                     }
                 }
 
                 Label {
                     anchors.centerIn: parent
                     z: 1
-                    text: bpmConfig.value
-                    font.pixelSize: Dims.l(38)
-                    font.family: "Noto Sans Condensed"
-                    font.weight: Font.Medium
+                    text:           bpmConfig.value
+                    font {
+                        pixelSize: Dims.l(38)
+                        family:    "Noto Sans Condensed"
+                        weight:    Font.Bold
+                    }
                     color: "#ffffff"
                 }
 
-                // "Tap" hint — visible only until the user taps once.
+                // "Tap" hint — disappears after first tap
                 Label {
-                    anchors.bottom: pulseSmall.bottom
+                    anchors.bottom:           pulseSmall.bottom
                     anchors.horizontalCenter: parent.horizontalCenter
-                    anchors.bottomMargin: Dims.h(4)
+                    anchors.bottomMargin:     Dims.h(4)
                     z: 1
                     //% "Tap"
-                    text: qsTrId("id-tap")
+                    text:    qsTrId("id-tap")
                     opacity: pulseSmall.opacity
                     visible: page0.lastTap === 0
                 }
@@ -143,10 +222,11 @@ Application {
 
                         if (page0.lastTap > 0 && (now - page0.lastTap) > root.sessionBreakMs) {
                             page0.intervals = []
-                            page0.lastTap = 0
+                            page0.lastTap   = 0
                         }
 
-                        timedPulse.stop()
+                        // Tap feedback — stop beat flash so they don't fight
+                        pulseSmallAnim.stop()
                         tapPulse.restart()
 
                         var beatMs = 60000 / bpmConfig.value
@@ -164,96 +244,45 @@ Application {
                         }
 
                         page0.lastTap = now
-
-                        resumeTimer.interval = Math.max(0, beatMs - root.flashDuration)
-                        resumeTimer.restart()
                     }
                 }
-
-                Timer {
-                    id: resumeTimer
-                    repeat: false
-                    onTriggered: pulseSmall.startAuto(bpmConfig.value > 0 ? 60000 / bpmConfig.value : 500)
-                }
-
-                Component.onCompleted: pulseSmall.startAuto(60000 / bpmConfig.value)
             }
 
-            // PAGE 1 ── Full Metronome + BPM CircularSpinner
+            // PAGE 1 ── Metronome ─────────────────────────────────────────────
             Item {
                 id: page1
                 anchors.fill: parent
                 visible: index === 1
 
-                SoundEffect {
-                    id: tickSound
-                    source: "file:///usr/share/sounds/tick.wav"
-                    volume: 1.0
-                }
-
-                NonGraphicalFeedback {
-                    id: hapticFeedback
-                    event: "press"
-                }
-
-                property bool soundActive:   false
-                property bool hapticActive:  false
-                property bool pulseVisible:  true
-                property int  colorIndex:    0
-
-                readonly property var pulseColors: [
-                    "#FF69B4", "#C5FCE4", "#FF4B0A",
-                    "#FFEC1F", "#0ABAFF", "#98D831"
-                ]
-
-                // ── Spinner debounce
-                property int pendingBpm: -1
-
-                Timer {
-                    id: spinnerDebounce
-                    interval: 1000
-                    repeat: false
-                    onTriggered: {
-                        if (page1.pendingBpm >= root.bpmMin) {
-                            bpmConfig.value = page1.pendingBpm
-                            page1.pendingBpm = -1
-                        }
-                    }
-                }
-
                 // ── Upper-left: pulse visibility toggle
                 Item {
-                    anchors.left: parent.left
-                    anchors.leftMargin: Dims.w(12)
-                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.left:                 parent.left
+                    anchors.leftMargin:           Dims.w(12)
+                    anchors.verticalCenter:       parent.verticalCenter
                     anchors.verticalCenterOffset: -Dims.h(25)
-                    width: Dims.l(20)
-                    height: Dims.l(20)
+                    width: Dims.l(20); height: Dims.l(20)
                     z: 2
 
                     Rectangle {
                         anchors.fill: parent
-                        radius: width / 2
-                        color: "#000000"
-                        opacity: page1.pulseVisible ? 0.7 : 0.2
+                        radius:  width / 2
+                        color:   "#000000"
+                        opacity: page1State.pulseVisible ? 0.7 : 0.2
                     }
 
                     Icon {
                         anchors.centerIn: parent
-                        width: Dims.l(12)
-                        height: Dims.l(12)
-                        name: page1.pulseVisible ? "ios-watch-aod-on" : "ios-watch-aod-off"
-                        opacity: page1.pulseVisible ? 1.0 : 0.7
+                        width: Dims.l(12); height: Dims.l(12)
+                        name:    page1State.pulseVisible ? "ios-watch-aod-on" : "ios-watch-aod-off"
+                        opacity: page1State.pulseVisible ? 1.0 : 0.7
                     }
 
                     MouseArea {
                         anchors.fill: parent
                         onClicked: {
-                            page1.pulseVisible = !page1.pulseVisible
-                            if (page1.pulseVisible) {
-                                metroAnim.restart()
-                            } else {
-                                metroAnim.stop()
+                            page1State.pulseVisible = !page1State.pulseVisible
+                            if (!page1State.pulseVisible) {
+                                pulseBigAnim.stop()
                                 pulseBig.opacity = 0.1
                             }
                         }
@@ -262,100 +291,92 @@ Application {
 
                 // ── Upper-right: pulse color cycle
                 Item {
-                    anchors.right: parent.right
-                    anchors.rightMargin: Dims.w(12)
-                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.right:                parent.right
+                    anchors.rightMargin:          Dims.w(12)
+                    anchors.verticalCenter:       parent.verticalCenter
                     anchors.verticalCenterOffset: -Dims.h(25)
-                    width: Dims.l(20)
-                    height: Dims.l(20)
+                    width: Dims.l(20); height: Dims.l(20)
                     z: 2
 
                     Rectangle {
                         anchors.fill: parent
-                        radius: width / 2
-                        color: "#000000"
-                        opacity: page1.pulseVisible ? 0.7 : 0.2
+                        radius:  width / 2
+                        color:   "#000000"
+                        opacity: page1State.pulseVisible ? 0.7 : 0.2
                     }
 
+                    // Small colored dot shows current active color
                     Rectangle {
                         anchors.centerIn: parent
-                        width: Dims.l(7)
-                        height: Dims.l(7)
+                        width:  Dims.l(7); height: Dims.l(7)
                         radius: width / 2
-                        color: page1.pulseColors[page1.colorIndex]
-                        opacity: page1.pulseVisible ? 1.0 : 0.7
+                        color:   root.pulseColor
+                        opacity: page1State.pulseVisible ? 1.0 : 0.7
                     }
 
                     MouseArea {
                         anchors.fill: parent
                         onClicked: {
-                            page1.colorIndex = (page1.colorIndex + 1) % page1.pulseColors.length
-                            var c = page1.pulseColors[page1.colorIndex]
-                            pulseBig.color   = c
-                            pulseSmall.color = c
+                            colorConfig.value = (colorConfig.value + 1) % root.pulseColors.length
                         }
                     }
                 }
 
                 // ── Lower-left: sound toggle
                 Item {
-                    anchors.left: parent.left
-                    anchors.leftMargin: Dims.w(12)
-                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.left:                 parent.left
+                    anchors.leftMargin:           Dims.w(12)
+                    anchors.verticalCenter:       parent.verticalCenter
                     anchors.verticalCenterOffset: Dims.h(25)
-                    width: Dims.l(20)
-                    height: Dims.l(20)
+                    width: Dims.l(20); height: Dims.l(20)
                     z: 2
 
                     Rectangle {
                         anchors.fill: parent
-                        radius: width / 2
-                        color: "#000000"
-                        opacity: page1.soundActive ? 0.7 : 0.2
+                        radius:  width / 2
+                        color:   "#000000"
+                        opacity: page1State.soundActive ? 0.7 : 0.2
                     }
 
                     Icon {
                         anchors.centerIn: parent
-                        width: Dims.l(12)
-                        height: Dims.l(12)
-                        name: "ios-musical-note"
-                        opacity: page1.soundActive ? 1.0 : 0.7
+                        width: Dims.l(12); height: Dims.l(12)
+                        name:    "ios-musical-note"
+                        opacity: page1State.soundActive ? 1.0 : 0.7
                     }
 
                     MouseArea {
                         anchors.fill: parent
-                        onClicked: page1.soundActive = !page1.soundActive
+                        onClicked: page1State.soundActive = !page1State.soundActive
                     }
                 }
 
                 // ── Lower-right: haptic toggle
                 Item {
-                    anchors.right: parent.right
-                    anchors.rightMargin: Dims.w(12)
-                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.right:                parent.right
+                    anchors.rightMargin:          Dims.w(12)
+                    anchors.verticalCenter:       parent.verticalCenter
                     anchors.verticalCenterOffset: Dims.h(25)
-                    width: Dims.l(20)
-                    height: Dims.l(20)
+                    width: Dims.l(20); height: Dims.l(20)
                     z: 2
 
                     Rectangle {
                         anchors.fill: parent
-                        radius: width / 2
-                        color: "#000000"
-                        opacity: page1.hapticActive ? 0.7 : 0.2
+                        radius:  width / 2
+                        color:   "#000000"
+                        opacity: page1State.hapticActive ? 0.7 : 0.2
                     }
 
                     Icon {
                         anchors.centerIn: parent
-                        width: Dims.l(12)
-                        height: Dims.l(12)
-                        name: "ios-watch-vibrating"
-                        opacity: page1.hapticActive ? 1.0 : 0.7
+                        width: Dims.l(12); height: Dims.l(12)
+                        name:    "ios-watch-vibrating"
+                        opacity: page1State.hapticActive ? 1.0 : 0.7
                     }
 
                     MouseArea {
                         anchors.fill: parent
-                        onClicked: page1.hapticActive = !page1.hapticActive
+                        onClicked: page1State.hapticActive = !page1State.hapticActive
                     }
                 }
 
@@ -363,27 +384,25 @@ Application {
                 Rectangle {
                     id: pulseBig
                     anchors.centerIn: parent
-                    width: Dims.l(100)
-                    height: width
-                    radius: width / 2
-                    color: page1.pulseColors[page1.colorIndex]
+                    width:   Dims.l(100)
+                    height:  width
+                    radius:  width / 2
+                    color:   root.pulseColor   // reactive to colorConfig
                     opacity: 0.1
-                    z: metroAnim.running ? 11 : 0
+                    z: pulseBigAnim.running ? 11 : 0
 
-                    SequentialAnimation on opacity {
-                        id: metroAnim
-                        running: false
-                        loops: Animation.Infinite
+                    // Beat flash — driven by root.beat() signal when pulseVisible
+                    SequentialAnimation {
+                        id: pulseBigAnim
+                        NumberAnimation { target: pulseBig; property: "opacity"; to: 1.0; duration: 60;  easing.type: Easing.OutQuad }
+                        NumberAnimation { target: pulseBig; property: "opacity"; to: 0.1; duration: 140; easing.type: Easing.InQuad }
+                    }
 
-                        ScriptAction {
-                            script: {
-                                if (page1.soundActive)  tickSound.play()
-                                    if (page1.hapticActive) hapticFeedback.play()
-                            }
+                    Connections {
+                        target: root
+                        function onBeat() {
+                            if (page1State.pulseVisible) pulseBigAnim.restart()
                         }
-                        NumberAnimation { to: 1.0; duration: 60;  easing.type: Easing.OutQuad }
-                        NumberAnimation { to: 0.1; duration: 140; easing.type: Easing.InQuad }
-                        PauseAnimation  { id: pauseBig; duration: 400 }
                     }
                 }
 
@@ -391,7 +410,7 @@ Application {
                 CircularSpinner {
                     id: bpmSpinner
                     anchors.centerIn: parent
-                    width: Dims.w(40)
+                    width:  Dims.w(40)
                     height: Dims.h(60)
                     z: 1
                     model: root.bpmModelCount
@@ -409,43 +428,14 @@ Application {
                     function onCurrentIndexChanged() {
                         var v = root.bpmModel[bpmSpinner.currentIndex]
                         if (v !== undefined) {
-                            page1.pendingBpm = v
+                            page1State.pendingBpm = v
                             spinnerDebounce.restart()
                         }
                     }
                 }
-
-                Connections {
-                    target: bpmConfig
-                    function onValueChanged() {
-                        if (pageView.currentIndex !== 1) return
-                            metroAnim.stop()
-                            pauseBig.duration = Math.max(0, 60000 / bpmConfig.value - root.flashDuration)
-                            metroAnim.restart()
-                    }
-                }
-
-                Connections {
-                    target: pageView
-                    function onCurrentIndexChanged() {
-                        if (pageView.currentIndex === 1) {
-                            if (page1.pulseVisible) {
-                                pauseBig.duration = Math.max(0, 60000 / bpmConfig.value - root.flashDuration)
-                                metroAnim.restart()
-                            }
-                        } else {
-                            metroAnim.stop()
-                            pulseBig.opacity = 0.1
-                        }
-                    }
-                }
-
-                Component.onCompleted: {
-                    pauseBig.duration = Math.max(0, 60000 / bpmConfig.value - root.flashDuration)
-                }
             }
 
-            // PAGE 2 ── Tuning Fork
+            // PAGE 2 ── Tuning Fork ───────────────────────────────────────────
             Item {
                 anchors.fill: parent
                 visible: index === 2
@@ -455,16 +445,15 @@ Application {
                 Timer {
                     id: toneLoop
                     interval: 3000
-                    repeat: true
+                    repeat:   true
                     onTriggered: tone.play()
                 }
 
                 // Upper half: frequency display, tap to advance carousel.
                 Item {
-
-                    anchors.top: parent.top
-                    anchors.left: parent.left
-                    anchors.right: parent.right
+                    anchors.top:       parent.top
+                    anchors.left:      parent.left
+                    anchors.right:     parent.right
                     anchors.topMargin: Dims.h(16)
                     height: parent.height * 0.5 - Dims.h(20)
 
@@ -472,16 +461,16 @@ Application {
                         id: freqLabel
                         anchors.centerIn: parent
                         //% "Hz"
-                        text: freqConfig.value + " " + qsTrId("id-hz")
+                        text:           freqConfig.value + " " + qsTrId("id-hz")
                         font.pixelSize: Dims.l(14)
                     }
 
                     Label {
-                        anchors.top: freqLabel.bottom
+                        anchors.top:              freqLabel.bottom
                         anchors.horizontalCenter: parent.horizontalCenter
-                        anchors.topMargin: Dims.h(-2)
+                        anchors.topMargin:        Dims.h(-2)
                         //% "Tap to change"
-                        text: qsTrId("id-tap-to-change")
+                        text:           qsTrId("id-tap-to-change")
                         font.pixelSize: Dims.l(6)
                         opacity: 0.6
                     }
@@ -496,28 +485,26 @@ Application {
                     }
                 }
 
-                // Lower half: pitchfork icon, tap to play / hold to loop.
+                // Lower half: fork icon, tap to play / hold to loop.
                 Item {
-
-                    anchors.bottom: parent.bottom
-                    anchors.left: parent.left
-                    anchors.right: parent.right
+                    anchors.bottom:       parent.bottom
+                    anchors.left:         parent.left
+                    anchors.right:        parent.right
                     anchors.bottomMargin: Dims.h(16)
                     height: parent.height * 0.5 - Dims.h(10)
 
                     Icon {
                         id: forkLabel
                         anchors.centerIn: parent
-                        width: Dims.l(24)
-                        height: Dims.l(24)
+                        width: Dims.l(24); height: Dims.l(24)
                         name: "ios-musical-note"
                     }
 
                     Label {
-                        anchors.top: forkLabel.bottom
+                        anchors.top:              forkLabel.bottom
                         anchors.horizontalCenter: forkLabel.horizontalCenter
                         //% "Hold to loop"
-                        text: qsTrId("id-hold-to-loop")
+                        text:           qsTrId("id-hold-to-loop")
                         font.pixelSize: Dims.l(6)
                         opacity: 0.6
                     }
@@ -544,10 +531,10 @@ Application {
 
     PageDot {
         anchors.horizontalCenter: parent.horizontalCenter
-        anchors.bottom: parent.bottom
-        anchors.bottomMargin: Dims.h(4)
-        height: Dims.h(3)
-        dotNumber: 3
+        anchors.bottom:           parent.bottom
+        anchors.bottomMargin:     Dims.h(4)
+        height:       Dims.h(3)
+        dotNumber:    3
         currentIndex: pageView.currentIndex
     }
 }
