@@ -29,8 +29,17 @@ Application {
 
     anchors.fill: parent
 
-    centerColor: "#119DA4"
-    outerColor:  "#090B0C"
+    // ── Per-page background colors ────────────────────────────────────────────
+    // Page 1 (metronome) is noticeably darker so the full-screen flash pops.
+    // Page 2 (tuning fork) is slightly darker than page 0 for a calmer feel.
+    readonly property var pageCenterColors: ["#119DA4", "#07454B", "#0E8890"]
+    readonly property var pageOuterColors:  ["#090B0C", "#050708", "#070909"]
+
+    centerColor: pageCenterColors[pageView.currentIndex]
+    outerColor:  pageOuterColors[pageView.currentIndex]
+
+    Behavior on centerColor { ColorAnimation { duration: 300; easing.type: Easing.InOutQuad } }
+    Behavior on outerColor  { ColorAnimation { duration: 300; easing.type: Easing.InOutQuad } }
 
     // ── Persisted config ──────────────────────────────────────────────────────
     ConfigurationValue { id: bpmConfig;   key: "/asteroid/apps/beatfork/bpm";        defaultValue: 120 }
@@ -52,12 +61,28 @@ Application {
 
     property var freqModel: [392, 415, 432, 440, 442, 444, 452]
 
+    readonly property var freqNames: [
+        //% "G4"
+        qsTrId("id-freq-g4"),
+        //% "Ab4"
+        qsTrId("id-freq-ab4"),
+        //% "A4 Verdi"
+        qsTrId("id-freq-a4-verdi"),
+        //% "A4 Standard"
+        qsTrId("id-freq-a4-standard"),
+        //% "A4 Orchestra"
+        qsTrId("id-freq-a4-orchestra"),
+        //% "A4 High"
+        qsTrId("id-freq-a4-high"),
+        //% "Bb4"
+        qsTrId("id-freq-bb4")
+    ]
+
     readonly property var pulseColors: [
         "#FF69B4", "#C5FCE4", "#FF4B0A",
         "#FFEC1F", "#0ABAFF", "#98D831"
     ]
 
-    // All pages bind to this — updates reactively when colorConfig changes.
     readonly property string pulseColor: pulseColors[colorConfig.value]
 
     readonly property var pageTitles: [
@@ -74,11 +99,11 @@ Application {
         id: page1State
         property bool soundActive:  false
         property bool hapticActive: false
-        property bool pulseVisible: true
+        property bool pulseVisible: false
         property int  pendingBpm:   -1
     }
 
-    // ── Audio / haptics — root-level, always loaded ───────────────────────────
+    // ── Audio / haptics ───────────────────────────────────────────────────────
     SoundEffect {
         id: tickSound
         source: "file:///usr/share/sounds/tick.wav"
@@ -91,8 +116,6 @@ Application {
     }
 
     // ── Master beat timer ─────────────────────────────────────────────────────
-    // Single source of truth for the beat. Survives page navigation.
-    // All visual and audio subscribers are driven from beatFlash().
     Timer {
         id: beatTimer
         interval:         Math.round(60000 / bpmConfig.value)
@@ -102,7 +125,6 @@ Application {
         onTriggered:      root.beatFlash()
     }
 
-    // Restart with correct interval whenever BPM changes.
     Connections {
         target: bpmConfig
         function onValueChanged() {
@@ -111,7 +133,7 @@ Application {
         }
     }
 
-    // ── Spinner debounce — root-level, shared ─────────────────────────────────
+    // ── Spinner debounce ──────────────────────────────────────────────────────
     Timer {
         id: spinnerDebounce
         interval: 1000
@@ -125,10 +147,6 @@ Application {
     }
 
     // ── Beat dispatcher ───────────────────────────────────────────────────────
-    // Each subscriber checks its own guard. Adding new indicators is additive.
-    // Animations live inside delegates and cannot be called from root scope
-    // directly — they may not exist if the delegate isn't instantiated.
-    // Emit a signal instead; each delegate subscribes locally.
     signal beat()
 
     function beatFlash() {
@@ -140,11 +158,12 @@ Application {
     // ─────────────────────────────────────────────────────────────────────────
     ListView {
         id: pageView
-        anchors.fill: parent
+        anchors.fill:       parent
         orientation:        ListView.Horizontal
         snapMode:           ListView.SnapOneItem
         highlightRangeMode: ListView.StrictlyEnforceRange
-        boundsBehavior:     Flickable.StopAtBounds
+        flickDeceleration:  5000
+        flickableDirection: Flickable.HorizontalFlick
         model: 3
 
         delegate: Item {
@@ -166,22 +185,20 @@ Application {
                     width:   Dims.l(66)
                     height:  width
                     radius:  width / 2
-                    color:   root.pulseColor   // reactive to colorConfig
-                    opacity: 0.1
+                    color:   root.pulseColor
+                    opacity: 0.0
                     z: 0
 
-                    // Tap flash — immediate user feedback on each tap
                     SequentialAnimation {
                         id: tapPulse
                         NumberAnimation { target: pulseSmall; property: "opacity"; to: 0.7; duration: 60;  easing.type: Easing.OutQuad }
-                        NumberAnimation { target: pulseSmall; property: "opacity"; to: 0.1; duration: 140; easing.type: Easing.InQuad }
+                        NumberAnimation { target: pulseSmall; property: "opacity"; to: 0.0; duration: 140; easing.type: Easing.InQuad }
                     }
 
-                    // Beat flash — driven by root.beat() signal
                     SequentialAnimation {
                         id: pulseSmallAnim
                         NumberAnimation { target: pulseSmall; property: "opacity"; to: 0.7; duration: 60;  easing.type: Easing.OutQuad }
-                        NumberAnimation { target: pulseSmall; property: "opacity"; to: 0.1; duration: 140; easing.type: Easing.InQuad }
+                        NumberAnimation { target: pulseSmall; property: "opacity"; to: 0.0; duration: 140; easing.type: Easing.InQuad }
                     }
 
                     Connections {
@@ -193,25 +210,28 @@ Application {
                 Label {
                     anchors.centerIn: parent
                     z: 1
-                    text:           bpmConfig.value
+                    text: bpmConfig.value
                     font {
-                        pixelSize: Dims.l(38)
+                        pixelSize: bpmConfig.value >= 100 ? Dims.l(32) : Dims.l(38)
                         family:    "Noto Sans Condensed"
                         weight:    Font.Bold
                     }
                     color: "#ffffff"
                 }
 
-                // "Tap" hint — disappears after first tap
                 Label {
                     anchors.bottom:           pulseSmall.bottom
                     anchors.horizontalCenter: parent.horizontalCenter
-                    anchors.bottomMargin:     Dims.h(4)
+                    anchors.bottomMargin:     Dims.h(6)
                     z: 1
                     //% "Tap"
                     text:    qsTrId("id-tap")
-                    opacity: pulseSmall.opacity
                     visible: page0.lastTap === 0
+                    opacity: pulseSmall.opacity * 1.1
+                    font {
+                        pixelSize: Dims.l(8)
+                        weight:    Font.Bold
+                    }
                 }
 
                 MouseArea {
@@ -225,7 +245,6 @@ Application {
                             page0.lastTap   = 0
                         }
 
-                        // Tap feedback — stop beat flash so they don't fight
                         pulseSmallAnim.stop()
                         tapPulse.restart()
 
@@ -254,20 +273,37 @@ Application {
                 anchors.fill: parent
                 visible: index === 1
 
-                // ── Upper-left: pulse visibility toggle
+                // ── Upper-left: pulse visibility toggle ───────────────────────
                 Item {
                     anchors.left:                 parent.left
-                    anchors.leftMargin:           Dims.w(12)
+                    anchors.leftMargin:           Dims.w(16)
                     anchors.verticalCenter:       parent.verticalCenter
-                    anchors.verticalCenterOffset: -Dims.h(25)
+                    anchors.verticalCenterOffset: -Dims.h(24)
                     width: Dims.l(20); height: Dims.l(20)
                     z: 2
 
                     Rectangle {
+                        id: pulseToggleBg
                         anchors.fill: parent
                         radius:  width / 2
-                        color:   "#000000"
                         opacity: page1State.pulseVisible ? 0.7 : 0.2
+
+                        // Beat-driven color pulse when active
+                        property color beatColor: "#000000"
+                        color: beatColor
+
+                        SequentialAnimation {
+                            id: pulseToggleBeat
+                            ColorAnimation { target: pulseToggleBg; property: "beatColor"; to: root.pulseColor; duration: 150; easing.type: Easing.OutQuad }
+                            ColorAnimation { target: pulseToggleBg; property: "beatColor"; to: "#000000";       duration: 350; easing.type: Easing.InQuad  }
+                        }
+
+                        Connections {
+                            target: root
+                            function onBeat() {
+                                if (page1State.pulseVisible) pulseToggleBeat.restart()
+                            }
+                        }
                     }
 
                     Icon {
@@ -283,35 +319,52 @@ Application {
                             page1State.pulseVisible = !page1State.pulseVisible
                             if (!page1State.pulseVisible) {
                                 pulseBigAnim.stop()
-                                pulseBig.opacity = 0.1
+                                pulseBig.opacity = 0.0
+                                pulseToggleBeat.stop()
+                                pulseToggleBg.beatColor = "#000000"
                             }
                         }
                     }
                 }
 
-                // ── Upper-right: pulse color cycle
+                // ── Upper-right: pulse color cycle ────────────────────────────
                 Item {
                     anchors.right:                parent.right
-                    anchors.rightMargin:          Dims.w(12)
+                    anchors.rightMargin:          Dims.w(16)
                     anchors.verticalCenter:       parent.verticalCenter
-                    anchors.verticalCenterOffset: -Dims.h(25)
+                    anchors.verticalCenterOffset: -Dims.h(24)
                     width: Dims.l(20); height: Dims.l(20)
                     z: 2
 
                     Rectangle {
+                        id: colorCycleBg
                         anchors.fill: parent
                         radius:  width / 2
-                        color:   "#000000"
-                        opacity: page1State.pulseVisible ? 0.7 : 0.2
+                        opacity: page1State.pulseVisible ? 0.55 : 0.1
+
+                        property color beatColor: "#000000"
+                        color: beatColor
+
+                        SequentialAnimation {
+                            id: colorCycleBeat
+                            ColorAnimation { target: colorCycleBg; property: "beatColor"; to: root.pulseColor; duration: 150; easing.type: Easing.OutQuad }
+                            ColorAnimation { target: colorCycleBg; property: "beatColor"; to: "#000000";       duration: 350; easing.type: Easing.InQuad  }
+                        }
+
+                        Connections {
+                            target: root
+                            function onBeat() {
+                                if (page1State.pulseVisible) colorCycleBeat.restart()
+                            }
+                        }
                     }
 
-                    // Small colored dot shows current active color
                     Rectangle {
                         anchors.centerIn: parent
                         width:  Dims.l(7); height: Dims.l(7)
                         radius: width / 2
                         color:   root.pulseColor
-                        opacity: page1State.pulseVisible ? 1.0 : 0.7
+                        opacity: page1State.pulseVisible ? 0.9 : 0.6
                     }
 
                     MouseArea {
@@ -322,20 +375,36 @@ Application {
                     }
                 }
 
-                // ── Lower-left: sound toggle
+                // ── Lower-left: sound toggle ──────────────────────────────────
                 Item {
                     anchors.left:                 parent.left
-                    anchors.leftMargin:           Dims.w(12)
+                    anchors.leftMargin:           Dims.w(16)
                     anchors.verticalCenter:       parent.verticalCenter
-                    anchors.verticalCenterOffset: Dims.h(25)
+                    anchors.verticalCenterOffset: Dims.h(24)
                     width: Dims.l(20); height: Dims.l(20)
                     z: 2
 
                     Rectangle {
+                        id: soundToggleBg
                         anchors.fill: parent
                         radius:  width / 2
-                        color:   "#000000"
                         opacity: page1State.soundActive ? 0.7 : 0.2
+
+                        property color beatColor: "#000000"
+                        color: beatColor
+
+                        SequentialAnimation {
+                            id: soundToggleBeat
+                            ColorAnimation { target: soundToggleBg; property: "beatColor"; to: root.pulseColor; duration: 150; easing.type: Easing.OutQuad }
+                            ColorAnimation { target: soundToggleBg; property: "beatColor"; to: "#000000";       duration: 350; easing.type: Easing.InQuad  }
+                        }
+
+                        Connections {
+                            target: root
+                            function onBeat() {
+                                if (page1State.soundActive) soundToggleBeat.restart()
+                            }
+                        }
                     }
 
                     Icon {
@@ -347,24 +416,46 @@ Application {
 
                     MouseArea {
                         anchors.fill: parent
-                        onClicked: page1State.soundActive = !page1State.soundActive
+                        onClicked: {
+                            page1State.soundActive = !page1State.soundActive
+                            if (!page1State.soundActive) {
+                                soundToggleBeat.stop()
+                                soundToggleBg.beatColor = "#000000"
+                            }
+                        }
                     }
                 }
 
-                // ── Lower-right: haptic toggle
+                // ── Lower-right: haptic toggle ────────────────────────────────
                 Item {
                     anchors.right:                parent.right
-                    anchors.rightMargin:          Dims.w(12)
+                    anchors.rightMargin:          Dims.w(16)
                     anchors.verticalCenter:       parent.verticalCenter
-                    anchors.verticalCenterOffset: Dims.h(25)
+                    anchors.verticalCenterOffset: Dims.h(24)
                     width: Dims.l(20); height: Dims.l(20)
                     z: 2
 
                     Rectangle {
+                        id: hapticToggleBg
                         anchors.fill: parent
                         radius:  width / 2
-                        color:   "#000000"
                         opacity: page1State.hapticActive ? 0.7 : 0.2
+
+                        property color beatColor: "#000000"
+                        color: beatColor
+
+                        SequentialAnimation {
+                            id: hapticToggleBeat
+                            ColorAnimation { target: hapticToggleBg; property: "beatColor"; to: root.pulseColor; duration: 150; easing.type: Easing.OutQuad }
+                            ColorAnimation { target: hapticToggleBg; property: "beatColor"; to: "#000000";       duration: 350; easing.type: Easing.InQuad  }
+                        }
+
+                        Connections {
+                            target: root
+                            function onBeat() {
+                                if (page1State.hapticActive) hapticToggleBeat.restart()
+                            }
+                        }
                     }
 
                     Icon {
@@ -376,26 +467,31 @@ Application {
 
                     MouseArea {
                         anchors.fill: parent
-                        onClicked: page1State.hapticActive = !page1State.hapticActive
+                        onClicked: {
+                            page1State.hapticActive = !page1State.hapticActive
+                            if (!page1State.hapticActive) {
+                                hapticToggleBeat.stop()
+                                hapticToggleBg.beatColor = "#000000"
+                            }
+                        }
                     }
                 }
 
-                // ── Full-screen pulse circle
+                // ── Full-screen pulse circle ──────────────────────────────────
                 Rectangle {
                     id: pulseBig
                     anchors.centerIn: parent
                     width:   Dims.l(100)
                     height:  width
                     radius:  width / 2
-                    color:   root.pulseColor   // reactive to colorConfig
-                    opacity: 0.1
+                    color:   root.pulseColor
+                    opacity: 0.0
                     z: pulseBigAnim.running ? 11 : 0
 
-                    // Beat flash — driven by root.beat() signal when pulseVisible
                     SequentialAnimation {
                         id: pulseBigAnim
                         NumberAnimation { target: pulseBig; property: "opacity"; to: 1.0; duration: 60;  easing.type: Easing.OutQuad }
-                        NumberAnimation { target: pulseBig; property: "opacity"; to: 0.1; duration: 140; easing.type: Easing.InQuad }
+                        NumberAnimation { target: pulseBig; property: "opacity"; to: 0.0; duration: 140; easing.type: Easing.InQuad }
                     }
 
                     Connections {
@@ -406,7 +502,7 @@ Application {
                     }
                 }
 
-                // ── BPM CircularSpinner
+                // ── BPM CircularSpinner ───────────────────────────────────────
                 CircularSpinner {
                     id: bpmSpinner
                     anchors.centerIn: parent
@@ -445,7 +541,7 @@ Application {
                     volume: 1.0
                 }
 
-                // Single-play auto-stop after 1 s
+                // Cuts the single-play preview after 1 s
                 Timer {
                     id: singlePlayStop
                     interval: 1000
@@ -453,30 +549,43 @@ Application {
                     onTriggered: tone.stop()
                 }
 
-                // Upper half: frequency display, tap to advance carousel.
+                // Upper half: frequency name + value, tap to advance carousel
                 Item {
                     anchors.top:       parent.top
                     anchors.left:      parent.left
                     anchors.right:     parent.right
-                    anchors.topMargin: Dims.h(16)
+                    anchors.topMargin: Dims.h(18)
                     height: parent.height * 0.5 - Dims.h(20)
+
+                    Label {
+                        id: freqNameLabel
+                        anchors.bottom:           freqLabel.top
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        anchors.bottomMargin:     Dims.h(-2)
+                        text: {
+                            var idx = root.freqModel.indexOf(freqConfig.value)
+                            return idx >= 0 ? root.freqNames[idx] : ""
+                        }
+                        font.pixelSize: Dims.l(6)
+                        opacity: 0.6
+                    }
 
                     Label {
                         id: freqLabel
                         anchors.centerIn: parent
                         //% "Hz"
                         text:           freqConfig.value + " " + qsTrId("id-hz")
-                        font.pixelSize: Dims.l(14)
+                        font.pixelSize: Dims.l(12)
                         opacity: 1.0
 
-                        // Gentle opacity pulse while loop is playing —
-                        // visible indicator when finger covers lower half
+                        // Pulses while loop is locked — upper-half feedback
+                        // when finger covers the play button
                         SequentialAnimation {
                             id: loopIndicator
                             running:  tone.playing && tone.loops === SoundEffect.Infinite
                             loops:    Animation.Infinite
-                            NumberAnimation { target: freqLabel; property: "opacity"; to: 0.6; duration: 600; easing.type: Easing.InOutSine }
-                            NumberAnimation { target: freqLabel; property: "opacity"; to: 1.0; duration: 600; easing.type: Easing.InOutSine }
+                            NumberAnimation { target: freqLabel; property: "opacity"; to: 0.5; duration: 400; easing.type: Easing.InOutSine }
+                            NumberAnimation { target: freqLabel; property: "opacity"; to: 1.0; duration: 400; easing.type: Easing.InOutSine }
                             onRunningChanged: if (!running) freqLabel.opacity = 1.0
                         }
                     }
@@ -487,7 +596,7 @@ Application {
                         anchors.topMargin:        Dims.h(-2)
                         //% "Tap to change"
                         text:           qsTrId("id-tap-to-change")
-                        font.pixelSize: Dims.l(5)
+                        font.pixelSize: Dims.l(6)
                         opacity: 0.6
                     }
 
@@ -503,12 +612,14 @@ Application {
                     }
                 }
 
-                // Lower half: play button — tap to play 1s preview, hold for continuous tone.
+                // Lower half: play button
+                // tap  → 1 s preview (tap again to stop early)
+                // hold → lock infinite loop (tap to stop)
                 Item {
                     anchors.bottom:       parent.bottom
                     anchors.left:         parent.left
                     anchors.right:        parent.right
-                    anchors.bottomMargin: Dims.h(16)
+                    anchors.bottomMargin: Dims.h(14)
                     height: parent.height * 0.5 - Dims.h(10)
 
                     Item {
@@ -528,6 +639,7 @@ Application {
                                 ColorAnimation { duration: 150 }
                             }
 
+                            // Slow breathe while silent — invites interaction
                             SequentialAnimation {
                                 id: idleBreath
                                 running:  !tone.playing
@@ -536,6 +648,7 @@ Application {
                                 NumberAnimation { target: forkBg; property: "opacity"; to: 0.7;  duration: 900; easing.type: Easing.InOutSine }
                             }
 
+                            // Flash on play start
                             SequentialAnimation {
                                 id: playingPulse
                                 running: false
@@ -553,6 +666,7 @@ Application {
 
                         MouseArea {
                             anchors.fill: parent
+                            // Prevents onClicked firing as a stop after a hold release
                             property bool holdActive: false
 
                             onClicked: {
@@ -561,9 +675,11 @@ Application {
                                     return
                                 }
                                 if (tone.playing) {
+                                    // Stop preview or locked loop
                                     singlePlayStop.stop()
                                     tone.stop()
                                 } else {
+                                    // 1 s preview
                                     tone.loops = 1
                                     tone.play()
                                     playingPulse.restart()
@@ -579,11 +695,9 @@ Application {
                                     playingPulse.restart()
                             }
 
+                            // Release does NOT stop the loop — next tap does.
                             onReleased: {
-                                if (holdActive) {
-                                    holdActive = false
-                                    tone.stop()
-                                }
+                                if (holdActive) holdActive = false
                             }
                         }
                     }
@@ -591,9 +705,9 @@ Application {
                     Label {
                         anchors.top:              forkButton.bottom
                         anchors.horizontalCenter: forkButton.horizontalCenter
-                        anchors.topMargin:        Dims.h(2)
-                        //% "Hold to loop"
-                        text:           tone.playing ? "" : qsTrId("id-hold-to-loop")
+                        anchors.topMargin:        Dims.h(1)
+                        //% "Tap to stop"
+                        text:           tone.playing ? qsTrId("id-tap-to-stop") : qsTrId("id-hold-to-loop")
                         font.pixelSize: Dims.l(6)
                         opacity: 0.6
                     }
