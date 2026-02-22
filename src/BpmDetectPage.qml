@@ -177,6 +177,22 @@ Item {
     }
 
     // ── BPM label ─────────────────────────────────────────────────────────────
+
+    Label {
+        anchors.top:           pulseSmall.top
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.topMargin:     Dims.h(6)
+        z: 2
+        //% "Tap"
+        text:    qsTrId("id-tap")
+        visible: page.lastTap === 0
+        opacity: pulseSmall.opacity
+        font {
+            pixelSize: Dims.l(8)
+            weight:    Font.Bold
+        }
+    }
+
     Label {
         id: bpmLabel
         anchors.centerIn: parent
@@ -188,12 +204,12 @@ Item {
             weight:    Font.Bold
         }
         color:   "#ffffff"
-        opacity: 0.6
+        opacity: 0.9
 
         SequentialAnimation {
             id: labelPump
-            NumberAnimation { target: bpmLabel; property: "opacity"; to: 1.0; duration: 60;  easing.type: Easing.OutQuad }
-            NumberAnimation { target: bpmLabel; property: "opacity"; to: 0.6; duration: 600; easing.type: Easing.InQuad }
+            NumberAnimation { target: bpmLabel; property: "opacity"; to: 0.3; duration: 90;  easing.type: Easing.Linear }
+            NumberAnimation { target: bpmLabel; property: "opacity"; to: 0.9; duration: 180; easing.type: Easing.Linear }
         }
 
         Connections {
@@ -202,19 +218,31 @@ Item {
         }
     }
 
+    // Tempo name — sits below BPM label, mirroring the Tap hint below
     Label {
         anchors.bottom:           pulseSmall.bottom
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottomMargin:     Dims.h(6)
         z: 2
-        //% "Tap"
-        text:    qsTrId("id-tap")
-        visible: page.lastTap === 0
-        opacity: 0.7
+        text: {
+            var bpm = page.bpmValue
+            if      (bpm < 60)  return "Largo"
+                else if (bpm < 66)  return "Larghetto"
+                    else if (bpm < 76)  return "Adagio"
+                        else if (bpm < 84)  return "Andante"
+                            else if (bpm < 96)  return "Andantino"
+                                else if (bpm < 108) return "Moderato"
+                                    else if (bpm < 120) return "Allegretto"
+                                        else if (bpm < 156) return "Allegro"
+                                            else if (bpm < 176) return "Vivace"
+                                                else if (bpm < 200) return "Presto"
+                                                    else                return "Prestissimo"
+        }
         font {
             pixelSize: Dims.l(8)
-            weight:    Font.Bold
+            family:    "Noto Sans Condensed"
         }
+        opacity: 0.7
     }
 
     MouseArea {
