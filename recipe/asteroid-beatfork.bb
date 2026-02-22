@@ -8,7 +8,7 @@ PR = "r1"
 PV = "+git${SRCPV}"
 S = "${WORKDIR}/git"
 inherit cmake_qt5 pkgconfig
-DEPENDS += "qml-asteroid asteroid-generate-desktop-native qttools-native qtdeclarative-native"
+DEPENDS += "nemo-keepalive qml-asteroid asteroid-generate-desktop-native qttools-native qtdeclarative-native"
 do_install:append() {
     install -d ${D}/usr/share/sounds
     install -m 0644 ${S}/src/tick.wav      ${D}/usr/share/sounds
