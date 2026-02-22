@@ -21,6 +21,7 @@ import QtQuick 2.9
 import QtMultimedia 5.8
 import Nemo.Configuration 1.0
 import Nemo.Ngf 1.0
+import Nemo.KeepAlive 1.1
 import org.asteroid.controls 1.0
 import org.asteroid.utils 1.0
 
@@ -30,8 +31,6 @@ Application {
     anchors.fill: parent
 
     // ── Per-page background colors ────────────────────────────────────────────
-    // Page 1 (metronome) is noticeably darker so the full-screen flash pops.
-    // Page 2 (tuning fork) is slightly darker than page 0 for a calmer feel.
     readonly property var pageCenterColors: ["#119DA4", "#07454B", "#0E8890"]
     readonly property var pageOuterColors:  ["#090B0C", "#050708", "#070909"]
 
@@ -51,7 +50,7 @@ Application {
     readonly property int bpmMax:         208
     readonly property int bpmModelCount:  bpmMax - bpmMin + 1  // 169
     readonly property int flashDuration:  200
-    readonly property int sessionBreakMs: 1500  // one beat at 40 BPM
+    readonly property int sessionBreakMs: 1500
 
     property var bpmModel: {
         var arr = []
@@ -94,13 +93,31 @@ Application {
         qsTrId("id-tuning-fork")
     ]
 
-    // ── Page 1 state — lives at root to survive delegate recycling ────────────
+    // ── Page state objects — live at root to survive delegate recycling ────────
     QtObject {
         id: page1State
         property bool soundActive:  false
         property bool hapticActive: false
         property bool pulseVisible: false
         property int  pendingBpm:   -1
+    }
+
+    // loopActive mirrors tone.loops === Infinite && tone.playing from page 2.
+    // Kept here so DisplayBlanking can see it without delegate-scope gymnastics.
+    QtObject {
+        id: page2State
+        property bool loopActive: false
+    }
+
+    // ── Screen blanking — prevent when any active output is running ───────────
+    // 1s preview does not qualify; only deliberate holds and metronome outputs.
+    Binding {
+        target:   DisplayBlanking
+        property: "preventBlanking"
+        value:    page1State.soundActive  ||
+        page1State.hapticActive ||
+        page1State.pulseVisible ||
+        page2State.loopActive
     }
 
     // ── Audio / haptics ───────────────────────────────────────────────────────
@@ -164,6 +181,7 @@ Application {
         highlightRangeMode: ListView.StrictlyEnforceRange
         flickDeceleration:  5000
         flickableDirection: Flickable.HorizontalFlick
+        boundsBehavior:     Flickable.StopAtBounds
         model: 3
 
         delegate: Item {
@@ -288,7 +306,6 @@ Application {
                         radius:  width / 2
                         opacity: page1State.pulseVisible ? 0.7 : 0.2
 
-                        // Beat-driven color pulse when active
                         property color beatColor: "#000000"
                         color: beatColor
 
@@ -546,7 +563,10 @@ Application {
                     id: singlePlayStop
                     interval: 1000
                     repeat:   false
-                    onTriggered: tone.stop()
+                    onTriggered: {
+                        tone.stop()
+                        // 1s preview never sets loopActive, nothing to clear
+                    }
                 }
 
                 // Upper half: frequency name + value, tap to advance carousel
@@ -582,7 +602,7 @@ Application {
                         // when finger covers the play button
                         SequentialAnimation {
                             id: loopIndicator
-                            running:  tone.playing && tone.loops === SoundEffect.Infinite
+                            running:  page2State.loopActive
                             loops:    Animation.Infinite
                             NumberAnimation { target: freqLabel; property: "opacity"; to: 0.5; duration: 400; easing.type: Easing.InOutSine }
                             NumberAnimation { target: freqLabel; property: "opacity"; to: 1.0; duration: 400; easing.type: Easing.InOutSine }
@@ -605,6 +625,7 @@ Application {
                         onClicked: {
                             singlePlayStop.stop()
                             tone.stop()
+                            page2State.loopActive = false
                             var idx = root.freqModel.indexOf(freqConfig.value)
                             freqConfig.value = root.freqModel[(idx + 1) % root.freqModel.length]
                             tone.source = "file:///usr/share/sounds/" + freqConfig.value + "hz.wav"
@@ -639,7 +660,6 @@ Application {
                                 ColorAnimation { duration: 150 }
                             }
 
-                            // Slow breathe while silent — invites interaction
                             SequentialAnimation {
                                 id: idleBreath
                                 running:  !tone.playing
@@ -648,7 +668,6 @@ Application {
                                 NumberAnimation { target: forkBg; property: "opacity"; to: 0.7;  duration: 900; easing.type: Easing.InOutSine }
                             }
 
-                            // Flash on play start
                             SequentialAnimation {
                                 id: playingPulse
                                 running: false
@@ -666,7 +685,6 @@ Application {
 
                         MouseArea {
                             anchors.fill: parent
-                            // Prevents onClicked firing as a stop after a hold release
                             property bool holdActive: false
 
                             onClicked: {
@@ -675,11 +693,11 @@ Application {
                                     return
                                 }
                                 if (tone.playing) {
-                                    // Stop preview or locked loop
                                     singlePlayStop.stop()
                                     tone.stop()
+                                    page2State.loopActive = false
                                 } else {
-                                    // 1 s preview
+                                    // 1 s preview — does not keep screen awake
                                     tone.loops = 1
                                     tone.play()
                                     playingPulse.restart()
@@ -692,6 +710,7 @@ Application {
                                 singlePlayStop.stop()
                                 tone.loops = SoundEffect.Infinite
                                 if (!tone.playing) tone.play()
+                                    page2State.loopActive = true
                                     playingPulse.restart()
                             }
 
