@@ -66,8 +66,8 @@ Item {
 
         SequentialAnimation {
             id: pulseSmallAnim
-            NumberAnimation { target: pulseSmall; property: "opacity"; to: 0.7; duration: 60;  easing.type: Easing.OutQuad }
-            NumberAnimation { target: pulseSmall; property: "opacity"; to: 0.0; duration: 140; easing.type: Easing.InQuad }
+            NumberAnimation { target: pulseSmall; property: "opacity"; to: 0.7; duration: 10;  easing.type: Easing.OutQuad }
+            NumberAnimation { target: pulseSmall; property: "opacity"; to: 0.0; duration: 190; easing.type: Easing.InQuad }
         }
 
         Connections {
