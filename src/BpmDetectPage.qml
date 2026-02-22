@@ -15,14 +15,14 @@ Item {
     id: page
 
     // ── Interface — primitives only, no object references ─────────────────────
-    property int    bpmValue:      120
-    property int    bpmMin:        40
-    property int    bpmMax:        208
+    property int    bpmValue:       120
+    property int    bpmMin:         40
+    property int    bpmMax:         208
     property int    sessionBreakMs: 1500
-    property string pulseColor:    "#00ff00"
-    property var    beatSource          // root item ref — only used as Connections target
+    property string pulseColor:     "#00ff00"
+    property var    beatSource
 
-    signal bpmValueSet(int bpm)         // write-back to bpmConfig.value in main
+    signal bpmValueSet(int bpm)
 
     // ── Settle guard ──────────────────────────────────────────────────────────
     property bool settled:   false
@@ -57,17 +57,19 @@ Item {
     Rectangle {
         id: pulseSmall
         anchors.centerIn: parent
-        width:   Dims.l(66)
+        width:   Dims.l(70)
         height:  width
         radius:  width / 2
-        color:   page.pulseColor
+        color:   "transparent"
+        border.color: page.pulseColor
+        border.width: Dims.l(4)
         opacity: 0.0
         z: 0
 
         SequentialAnimation {
             id: pulseSmallAnim
-            NumberAnimation { target: pulseSmall; property: "opacity"; to: 0.7; duration: 10;  easing.type: Easing.OutQuad }
-            NumberAnimation { target: pulseSmall; property: "opacity"; to: 0.0; duration: 190; easing.type: Easing.InQuad }
+            NumberAnimation { target: pulseSmall; property: "opacity"; to: 0.6; duration: 10;  easing.type: Easing.Linear }
+            NumberAnimation { target: pulseSmall; property: "opacity"; to: 0.0; duration: 170; easing.type: Easing.InQuad }
         }
 
         Connections {
@@ -78,7 +80,7 @@ Item {
         }
     }
 
-    // ── Ripple rings ──────────────────────────────────────────────────────────
+    // ── Ripple rings — start close to BPM label, expand to screen edge ────────
     Rectangle {
         id: ripple1
         anchors.centerIn: parent
@@ -87,15 +89,15 @@ Item {
         radius:  width / 2
         color:   "transparent"
         border.color: page.pulseColor
-        border.width: Dims.l(0.8)
+        border.width: Dims.l(3)
         opacity: 0.0
-        scale:   1.0
+        scale:   0.3
         z: 1
 
         ParallelAnimation {
             id: ripple1Anim
-            NumberAnimation { target: ripple1; property: "scale";   from: 1.0; to: 1.7; duration: 500; easing.type: Easing.OutQuad }
-            NumberAnimation { target: ripple1; property: "opacity"; from: 0.6; to: 0.0; duration: 500; easing.type: Easing.InQuad  }
+            NumberAnimation { target: ripple1; property: "scale";   from: 0.4; to: 1.0; duration: 300; easing.type: Easing.OutQuad }
+            NumberAnimation { target: ripple1; property: "opacity"; from: 0.6; to: 0.0; duration: 300; easing.type: Easing.InQuad  }
         }
 
         Connections {
@@ -112,17 +114,17 @@ Item {
         radius:  width / 2
         color:   "transparent"
         border.color: page.pulseColor
-        border.width: Dims.l(0.5)
+        border.width: Dims.l(2)
         opacity: 0.0
-        scale:   1.0
+        scale:   0.3
         z: 1
 
         SequentialAnimation {
             id: ripple2Anim
-            PauseAnimation { duration: 120 }
+            PauseAnimation { duration: 80 }
             ParallelAnimation {
-                NumberAnimation { target: ripple2; property: "scale";   from: 1.0; to: 1.55; duration: 450; easing.type: Easing.OutQuad }
-                NumberAnimation { target: ripple2; property: "opacity"; from: 0.4; to: 0.0;  duration: 450; easing.type: Easing.InQuad  }
+                NumberAnimation { target: ripple2; property: "scale";   from: 0.4; to: 0.9; duration: 250; easing.type: Easing.OutQuad }
+                NumberAnimation { target: ripple2; property: "opacity"; from: 0.5; to: 0.0; duration: 250; easing.type: Easing.InQuad  }
             }
         }
 
@@ -132,84 +134,41 @@ Item {
         }
     }
 
-    // ── Sparkle dots ──────────────────────────────────────────────────────────
-    Repeater {
-        model: 6
-        z: 1
-
-        Item {
-            anchors.centerIn: parent
-            rotation: index * 60
-
-            property real dotX:      Dims.l(33)
-            property real dotOpacity: 0.0
-
-            Rectangle {
-                width:  Dims.l(2.2)
-                height: Dims.l(2.2)
-                radius: width / 2
-                color:  page.pulseColor
-                x: parent.dotX
-                y: -height / 2
-                opacity: parent.dotOpacity
-            }
-
-            SequentialAnimation {
-                id: sparkAnim
-                ParallelAnimation {
-                    NumberAnimation {
-                        property: "dotX"
-                        from: Dims.l(33); to: Dims.l(54)
-                        duration: 480; easing.type: Easing.OutQuad
-                    }
-                    SequentialAnimation {
-                        NumberAnimation { property: "dotOpacity"; to: 0.95; duration: 60  }
-                        NumberAnimation { property: "dotOpacity"; to: 0.0;  duration: 420; easing.type: Easing.InQuad }
-                    }
-                }
-            }
-
-            Connections {
-                target: page
-                function onTapCountChanged() { sparkAnim.restart() }
-            }
-        }
-    }
-
-    // ── BPM label ─────────────────────────────────────────────────────────────
-
+    // ── Tap hint ──────────────────────────────────────────────────────────────
     Label {
-        anchors.top:           pulseSmall.top
+        anchors.top:              pulseSmall.top
         anchors.horizontalCenter: parent.horizontalCenter
-        anchors.topMargin:     Dims.h(6)
+        anchors.topMargin:        Dims.h(7)
         z: 2
         //% "Tap"
         text:    qsTrId("id-tap")
         visible: page.lastTap === 0
         opacity: pulseSmall.opacity
         font {
-            pixelSize: Dims.l(8)
+            pixelSize: Dims.l(9)
             weight:    Font.Bold
         }
     }
 
+    // ── BPM label ─────────────────────────────────────────────────────────────
     Label {
         id: bpmLabel
         anchors.centerIn: parent
         z: 2
         text: page.bpmValue
         font {
-            pixelSize: page.bpmValue >= 100 ? Dims.l(32) : Dims.l(38)
+            pixelSize: page.bpmValue >= 100 ? Dims.l(32) : Dims.l(36)
             family:    "Noto Sans Condensed"
             weight:    Font.Bold
         }
         color:   "#ffffff"
         opacity: 0.9
+        scale: 1.0
 
         SequentialAnimation {
             id: labelPump
-            NumberAnimation { target: bpmLabel; property: "opacity"; to: 0.3; duration: 90;  easing.type: Easing.Linear }
-            NumberAnimation { target: bpmLabel; property: "opacity"; to: 0.9; duration: 180; easing.type: Easing.Linear }
+            NumberAnimation { target: bpmLabel; property: "scale"; to: 1.4; duration: 45;  easing.type: Easing.InQuad }
+            NumberAnimation { target: bpmLabel; property: "scale"; to: 1.0; duration: 90; easing.type: Easing.OutQuad }
         }
 
         Connections {
@@ -218,11 +177,11 @@ Item {
         }
     }
 
-    // Tempo name — sits below BPM label, mirroring the Tap hint below
+    // ── Tempo name ────────────────────────────────────────────────────────────
     Label {
         anchors.bottom:           pulseSmall.bottom
         anchors.horizontalCenter: parent.horizontalCenter
-        anchors.bottomMargin:     Dims.h(6)
+        anchors.bottomMargin:     Dims.h(8)
         z: 2
         text: {
             var bpm = page.bpmValue
@@ -245,6 +204,7 @@ Item {
         opacity: 0.7
     }
 
+    // ── Tap area ──────────────────────────────────────────────────────────────
     MouseArea {
         anchors.fill: parent
         z: 3
