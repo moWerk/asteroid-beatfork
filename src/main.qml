@@ -191,7 +191,7 @@ Application {
                 anchors.fill: parent
                 visible: index === 0
 
-                // Settle guard — animations only fire 800ms after page is in focus
+                // Settle guard
                 property bool settled: false
                 Timer {
                     id: settleTimer0
@@ -215,7 +215,10 @@ Application {
 
                 property real lastTap:   0
                 property var  intervals: []
+                // Incremented on each tap — sparkle and label animations watch this
+                property int  tapCount:  0
 
+                // ── Beat circle ───────────────────────────────────────────────
                 Rectangle {
                     id: pulseSmall
                     anchors.centerIn: parent
@@ -226,12 +229,7 @@ Application {
                     opacity: 0.0
                     z: 0
 
-                    SequentialAnimation {
-                        id: tapPulse
-                        NumberAnimation { target: pulseSmall; property: "opacity"; to: 0.7; duration: 60;  easing.type: Easing.OutQuad }
-                        NumberAnimation { target: pulseSmall; property: "opacity"; to: 0.0; duration: 140; easing.type: Easing.InQuad }
-                    }
-
+                    // Beat-only animation — tap no longer interrupts this
                     SequentialAnimation {
                         id: pulseSmallAnim
                         NumberAnimation { target: pulseSmall; property: "opacity"; to: 0.7; duration: 60;  easing.type: Easing.OutQuad }
@@ -246,27 +244,144 @@ Application {
                     }
                 }
 
-                Label {
+                // ── Ripple rings — emit outward from pulseSmall edge on tap ───
+                // Ring 1: immediate
+                Rectangle {
+                    id: ripple1
                     anchors.centerIn: parent
+                    width:   pulseSmall.width
+                    height:  width
+                    radius:  width / 2
+                    color:   "transparent"
+                    border.color: root.pulseColor
+                    border.width: Dims.l(0.8)
+                    opacity: 0.0
+                    scale:   1.0
                     z: 1
+
+                    ParallelAnimation {
+                        id: ripple1Anim
+                        NumberAnimation { target: ripple1; property: "scale";   from: 1.0; to: 1.7; duration: 500; easing.type: Easing.OutQuad }
+                        NumberAnimation { target: ripple1; property: "opacity"; from: 0.6; to: 0.0; duration: 500; easing.type: Easing.InQuad  }
+                    }
+
+                    Connections {
+                        target: page0
+                        function onTapCountChanged() { ripple1Anim.restart() }
+                    }
+                }
+
+                // Ring 2: delayed 120ms
+                Rectangle {
+                    id: ripple2
+                    anchors.centerIn: parent
+                    width:   pulseSmall.width
+                    height:  width
+                    radius:  width / 2
+                    color:   "transparent"
+                    border.color: root.pulseColor
+                    border.width: Dims.l(0.5)
+                    opacity: 0.0
+                    scale:   1.0
+                    z: 1
+
+                    SequentialAnimation {
+                        id: ripple2Anim
+                        PauseAnimation   { duration: 120 }
+                        ParallelAnimation {
+                            NumberAnimation { target: ripple2; property: "scale";   from: 1.0; to: 1.55; duration: 450; easing.type: Easing.OutQuad }
+                            NumberAnimation { target: ripple2; property: "opacity"; from: 0.4; to: 0.0;  duration: 450; easing.type: Easing.InQuad  }
+                        }
+                    }
+
+                    Connections {
+                        target: page0
+                        function onTapCountChanged() { ripple2Anim.restart() }
+                    }
+                }
+
+                // ── Sparkle dots — 6 rays at 60° intervals, shoot from rim ───
+                Repeater {
+                    model: 6
+                    z: 1
+
+                    Item {
+                        anchors.centerIn: parent
+                        // Each item is rotated to its spoke angle;
+                        // the dot then animates along local X (outward)
+                        rotation: index * 60
+
+                        property real dotX:      Dims.l(33)   // pulseSmall radius
+                        property real dotOpacity: 0.0
+
+                        Rectangle {
+                            width:  Dims.l(2.2)
+                            height: Dims.l(2.2)
+                            radius: width / 2
+                            color:  root.pulseColor
+                            x: parent.dotX
+                            y: -height / 2
+                            opacity: parent.dotOpacity
+                        }
+
+                        SequentialAnimation {
+                            id: sparkAnim
+                            ParallelAnimation {
+                                NumberAnimation {
+                                    property: "dotX"
+                                    from: Dims.l(33); to: Dims.l(54)
+                                    duration: 480; easing.type: Easing.OutQuad
+                                }
+                                SequentialAnimation {
+                                    NumberAnimation { property: "dotOpacity"; to: 0.95; duration: 60  }
+                                    NumberAnimation { property: "dotOpacity"; to: 0.0;  duration: 420; easing.type: Easing.InQuad }
+                                }
+                            }
+                        }
+
+                        Connections {
+                            target: page0
+                            function onTapCountChanged() { sparkAnim.restart() }
+                        }
+                    }
+                }
+
+                // ── BPM label — pumps bright on tap, rests at 60% opacity ────
+                Label {
+                    id: bpmLabel
+                    anchors.centerIn: parent
+                    z: 2
                     text: bpmConfig.value
                     font {
                         pixelSize: bpmConfig.value >= 100 ? Dims.l(32) : Dims.l(38)
                         family:    "Noto Sans Condensed"
                         weight:    Font.Bold
                     }
-                    color: "#ffffff"
+                    color:   "#ffffff"
+                    opacity: 0.6    // resting state
+
+                    SequentialAnimation {
+                        id: labelPump
+                        NumberAnimation { target: bpmLabel; property: "opacity"; to: 1.0; duration: 60;  easing.type: Easing.OutQuad }
+                        NumberAnimation { target: bpmLabel; property: "opacity"; to: 0.6; duration: 600; easing.type: Easing.InQuad }
+                    }
+
+                    Connections {
+                        target: page0
+                        function onTapCountChanged() { labelPump.restart() }
+                    }
                 }
 
+                // "Tap" hint — disappears after first tap
                 Label {
                     anchors.bottom:           pulseSmall.bottom
                     anchors.horizontalCenter: parent.horizontalCenter
                     anchors.bottomMargin:     Dims.h(6)
-                    z: 1
+                    z: 2
                     //% "Tap"
                     text:    qsTrId("id-tap")
                     visible: page0.lastTap === 0
-                    opacity: pulseSmall.opacity * 1.1
+                    opacity: 0.7
                     font {
                         pixelSize: Dims.l(8)
                         weight:    Font.Bold
@@ -275,7 +390,7 @@ Application {
 
                 MouseArea {
                     anchors.fill: parent
-                    z: 2
+                    z: 3
                     onClicked: {
                         var now = new Date().getTime()
 
@@ -284,8 +399,8 @@ Application {
                             page0.lastTap   = 0
                         }
 
-                        pulseSmallAnim.stop()
-                        tapPulse.restart()
+                        // Fire all tap effects via single counter increment
+                        page0.tapCount++
 
                         var beatMs = 60000 / bpmConfig.value
 
@@ -689,12 +804,85 @@ Application {
                         width:  Dims.l(30)
                         height: Dims.l(30)
 
+                        // Ripple counter — incremented by rippleTimer to drive
+                        // ring animations without direct animation cross-calls
+                        property int rippleCount: 0
+
+                        // Fires calmly while tone is playing, independent of BPM
+                        Timer {
+                            id: rippleTimer
+                            interval: 1200
+                            repeat:   true
+                            running:  tone.playing
+                            onTriggered: forkButton.rippleCount++
+                        }
+
+                        // Ring 1: immediate, expands to ~2× button size
+                        Rectangle {
+                            id: forkRipple1
+                            anchors.centerIn: parent
+                            width:   forkButton.width
+                            height:  width
+                            radius:  width / 2
+                            color:   "transparent"
+                            border.color: root.pulseColor
+                            border.width: Dims.l(0.8)
+                            opacity: 0.0
+                            scale:   1.0
+                            z: 0
+
+                            ParallelAnimation {
+                                id: forkRipple1Anim
+                                NumberAnimation { target: forkRipple1; property: "scale";   from: 1.0; to: 2.0; duration: 700; easing.type: Easing.OutQuad }
+                                NumberAnimation { target: forkRipple1; property: "opacity"; from: 0.7; to: 0.0; duration: 700; easing.type: Easing.InQuad  }
+                            }
+
+                            Connections {
+                                target: forkButton
+                                function onRippleCountChanged() {
+                                    if (tone.playing) forkRipple1Anim.restart()
+                                }
+                            }
+                        }
+
+                        // Ring 2: delayed 200ms, slightly slower and thinner
+                        Rectangle {
+                            id: forkRipple2
+                            anchors.centerIn: parent
+                            width:   forkButton.width
+                            height:  width
+                            radius:  width / 2
+                            color:   "transparent"
+                            border.color: root.pulseColor
+                            border.width: Dims.l(0.5)
+                            opacity: 0.0
+                            scale:   1.0
+                            z: 0
+
+                            SequentialAnimation {
+                                id: forkRipple2Anim
+                                PauseAnimation { duration: 200 }
+                                ParallelAnimation {
+                                    NumberAnimation { target: forkRipple2; property: "scale";   from: 1.0; to: 1.7; duration: 600; easing.type: Easing.OutQuad }
+                                    NumberAnimation { target: forkRipple2; property: "opacity"; from: 0.45; to: 0.0; duration: 600; easing.type: Easing.InQuad  }
+                                }
+                            }
+
+                            Connections {
+                                target: forkButton
+                                function onRippleCountChanged() {
+                                    if (tone.playing) forkRipple2Anim.restart()
+                                }
+                            }
+                        }
+
                         Rectangle {
                             id: forkBg
                             anchors.fill: parent
                             radius:  width / 2
                             color:   tone.playing ? root.pulseColor : "#000000"
                             opacity: 0.7
+                            z: 1
 
                             Behavior on color {
                                 ColorAnimation { duration: 150 }
@@ -721,10 +909,12 @@ Application {
                             width:  Dims.l(18)
                             height: Dims.l(18)
                             name:   "ios-musical-note"
+                            z: 2
                         }
 
                         MouseArea {
                             anchors.fill: parent
+                            z: 3
                             property bool holdActive: false
 
                             onClicked: {
@@ -741,6 +931,7 @@ Application {
                                     tone.play()
                                     playingPulse.restart()
                                     singlePlayStop.restart()
+                                    forkButton.rippleCount++
                                 }
                             }
 
@@ -751,6 +942,7 @@ Application {
                                 if (!tone.playing) tone.play()
                                     page2State.loopActive = true
                                     playingPulse.restart()
+                                    forkButton.rippleCount++
                             }
 
                             onReleased: {
