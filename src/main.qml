@@ -179,7 +179,8 @@ Application {
         flickDeceleration:  5000
         flickableDirection: Flickable.HorizontalFlick
         boundsBehavior:     Flickable.StopAtBounds
-        model: 3
+        // Tuning fork page hidden on devices without a speaker
+        model: DeviceSpecs.hasSpeaker ? 3 : 2
 
         delegate: Item {
             width:  pageView.width
@@ -215,8 +216,10 @@ Application {
 
                 property real lastTap:   0
                 property var  intervals: []
-                // Incremented on each tap — sparkle and label animations watch this
                 property int  tapCount:  0
+
+                // ── Edge indicator ────────────────────────────────────────────
+                Indicator { edge: Qt.RightEdge }
 
                 // ── Beat circle ───────────────────────────────────────────────
                 Rectangle {
@@ -229,7 +232,6 @@ Application {
                     opacity: 0.0
                     z: 0
 
-                    // Beat-only animation — tap no longer interrupts this
                     SequentialAnimation {
                         id: pulseSmallAnim
                         NumberAnimation { target: pulseSmall; property: "opacity"; to: 0.7; duration: 60;  easing.type: Easing.OutQuad }
@@ -244,8 +246,7 @@ Application {
                     }
                 }
 
-                // ── Ripple rings — emit outward from pulseSmall edge on tap ───
-                // Ring 1: immediate
+                // ── Ripple rings ──────────────────────────────────────────────
                 Rectangle {
                     id: ripple1
                     anchors.centerIn: parent
@@ -271,7 +272,6 @@ Application {
                     }
                 }
 
-                // Ring 2: delayed 120ms
                 Rectangle {
                     id: ripple2
                     anchors.centerIn: parent
@@ -287,7 +287,7 @@ Application {
 
                     SequentialAnimation {
                         id: ripple2Anim
-                        PauseAnimation   { duration: 120 }
+                        PauseAnimation { duration: 120 }
                         ParallelAnimation {
                             NumberAnimation { target: ripple2; property: "scale";   from: 1.0; to: 1.55; duration: 450; easing.type: Easing.OutQuad }
                             NumberAnimation { target: ripple2; property: "opacity"; from: 0.4; to: 0.0;  duration: 450; easing.type: Easing.InQuad  }
@@ -300,18 +300,16 @@ Application {
                     }
                 }
 
-                // ── Sparkle dots — 6 rays at 60° intervals, shoot from rim ───
+                // ── Sparkle dots ──────────────────────────────────────────────
                 Repeater {
                     model: 6
                     z: 1
 
                     Item {
                         anchors.centerIn: parent
-                        // Each item is rotated to its spoke angle;
-                        // the dot then animates along local X (outward)
                         rotation: index * 60
 
-                        property real dotX:      Dims.l(33)   // pulseSmall radius
+                        property real dotX:      Dims.l(33)
                         property real dotOpacity: 0.0
 
                         Rectangle {
@@ -346,7 +344,7 @@ Application {
                     }
                 }
 
-                // ── BPM label — pumps bright on tap, rests at 60% opacity ────
+                // ── BPM label ─────────────────────────────────────────────────
                 Label {
                     id: bpmLabel
                     anchors.centerIn: parent
@@ -358,7 +356,7 @@ Application {
                         weight:    Font.Bold
                     }
                     color:   "#ffffff"
-                    opacity: 0.6    // resting state
+                    opacity: 0.6
 
                     SequentialAnimation {
                         id: labelPump
@@ -399,7 +397,6 @@ Application {
                             page0.lastTap   = 0
                         }
 
-                        // Fire all tap effects via single counter increment
                         page0.tapCount++
 
                         var beatMs = 60000 / bpmConfig.value
@@ -443,7 +440,6 @@ Application {
                         } else {
                             settleTimer1.stop()
                             page1.settled = false
-                            // Stop all beat animations cleanly
                             pulseBigAnim.stop()
                             pulseBig.opacity = 0.0
                             pulseToggleBeat.stop();  pulseToggleBg.beatColor  = "#000000"
@@ -453,6 +449,11 @@ Application {
                         }
                     }
                 }
+
+                // ── Edge indicators ───────────────────────────────────────────
+                Indicator { edge: Qt.LeftEdge }
+                // Right indicator only shown when tuning fork page is available
+                Indicator { edge: Qt.RightEdge; visible: DeviceSpecs.hasSpeaker }
 
                 // ── Upper-left: pulse visibility toggle ───────────────────────
                 Item {
@@ -555,13 +556,14 @@ Application {
                     }
                 }
 
-                // ── Lower-left: sound toggle ──────────────────────────────────
+                // ── Lower-left: sound toggle (hidden on devices without speaker)
                 Item {
                     anchors.left:                 parent.left
                     anchors.leftMargin:           Dims.w(16)
                     anchors.verticalCenter:       parent.verticalCenter
                     anchors.verticalCenterOffset: Dims.h(24)
                     width: Dims.l(20); height: Dims.l(20)
+                    visible: DeviceSpecs.hasSpeaker
                     z: 2
 
                     Rectangle {
@@ -712,9 +714,13 @@ Application {
             }
 
             // PAGE 2 ── Tuning Fork ───────────────────────────────────────────
+            // Only reachable on devices with a speaker (model count = 3)
             Item {
                 anchors.fill: parent
                 visible: index === 2
+
+                // ── Edge indicator ────────────────────────────────────────────
+                Indicator { edge: Qt.LeftEdge }
 
                 SoundEffect {
                     id: tone
@@ -804,11 +810,8 @@ Application {
                         width:  Dims.l(30)
                         height: Dims.l(30)
 
-                        // Ripple counter — incremented by rippleTimer to drive
-                        // ring animations without direct animation cross-calls
                         property int rippleCount: 0
 
-                        // Fires calmly while tone is playing, independent of BPM
                         Timer {
                             id: rippleTimer
                             interval: 1200
@@ -817,7 +820,6 @@ Application {
                             onTriggered: forkButton.rippleCount++
                         }
 
-                        // Ring 1: immediate, expands to ~2× button size
                         Rectangle {
                             id: forkRipple1
                             anchors.centerIn: parent
@@ -845,7 +847,6 @@ Application {
                             }
                         }
 
-                        // Ring 2: delayed 200ms, slightly slower and thinner
                         Rectangle {
                             id: forkRipple2
                             anchors.centerIn: parent
@@ -969,8 +970,6 @@ Application {
         }
     }
 
-    // PageHeader fades out on the metronome page while pulseVisible is active
-    // so the full-screen flash can reach every pixel unobstructed.
     PageHeader {
         text: root.pageTitles[pageView.currentIndex]
         opacity: (pageView.currentIndex === 1 && page1State.pulseVisible) ? 0.0 : 1.0
@@ -982,7 +981,7 @@ Application {
         anchors.bottom:           parent.bottom
         anchors.bottomMargin:     Dims.h(4)
         height:       Dims.h(3)
-        dotNumber:    3
+        dotNumber:    DeviceSpecs.hasSpeaker ? 3 : 2
         currentIndex: pageView.currentIndex
     }
 }
