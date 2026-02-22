@@ -93,7 +93,7 @@ Application {
         qsTrId("id-tuning-fork")
     ]
 
-    // ── Page state objects — live at root to survive delegate recycling ────────
+    // ── Page state objects ────────────────────────────────────────────────────
     QtObject {
         id: page1State
         property bool soundActive:  false
@@ -102,15 +102,12 @@ Application {
         property int  pendingBpm:   -1
     }
 
-    // loopActive mirrors tone.loops === Infinite && tone.playing from page 2.
-    // Kept here so DisplayBlanking can see it without delegate-scope gymnastics.
     QtObject {
         id: page2State
         property bool loopActive: false
     }
 
-    // ── Screen blanking — prevent when any active output is running ───────────
-    // 1s preview does not qualify; only deliberate holds and metronome outputs.
+    // ── Screen keepalive ──────────────────────────────────────────────────────
     Binding {
         target:   DisplayBlanking
         property: "preventBlanking"
@@ -194,6 +191,28 @@ Application {
                 anchors.fill: parent
                 visible: index === 0
 
+                // Settle guard — animations only fire 800ms after page is in focus
+                property bool settled: false
+                Timer {
+                    id: settleTimer0
+                    interval: 800
+                    repeat:   false
+                    onTriggered: page0.settled = true
+                }
+                Connections {
+                    target: pageView
+                    function onCurrentIndexChanged() {
+                        if (pageView.currentIndex === 0) {
+                            settleTimer0.restart()
+                        } else {
+                            settleTimer0.stop()
+                            page0.settled = false
+                            pulseSmallAnim.stop()
+                            pulseSmall.opacity = 0.0
+                        }
+                    }
+                }
+
                 property real lastTap:   0
                 property var  intervals: []
 
@@ -221,7 +240,9 @@ Application {
 
                     Connections {
                         target: root
-                        function onBeat() { pulseSmallAnim.restart() }
+                        function onBeat() {
+                            if (page0.settled) pulseSmallAnim.restart()
+                        }
                     }
                 }
 
@@ -291,6 +312,33 @@ Application {
                 anchors.fill: parent
                 visible: index === 1
 
+                // Settle guard
+                property bool settled: false
+                Timer {
+                    id: settleTimer1
+                    interval: 800
+                    repeat:   false
+                    onTriggered: page1.settled = true
+                }
+                Connections {
+                    target: pageView
+                    function onCurrentIndexChanged() {
+                        if (pageView.currentIndex === 1) {
+                            settleTimer1.restart()
+                        } else {
+                            settleTimer1.stop()
+                            page1.settled = false
+                            // Stop all beat animations cleanly
+                            pulseBigAnim.stop()
+                            pulseBig.opacity = 0.0
+                            pulseToggleBeat.stop();  pulseToggleBg.beatColor  = "#000000"
+                            colorCycleBeat.stop();   colorCycleBg.beatColor   = "#000000"
+                            soundToggleBeat.stop();  soundToggleBg.beatColor  = "#000000"
+                            hapticToggleBeat.stop(); hapticToggleBg.beatColor = "#000000"
+                        }
+                    }
+                }
+
                 // ── Upper-left: pulse visibility toggle ───────────────────────
                 Item {
                     anchors.left:                 parent.left
@@ -318,7 +366,7 @@ Application {
                         Connections {
                             target: root
                             function onBeat() {
-                                if (page1State.pulseVisible) pulseToggleBeat.restart()
+                                if (page1.settled && page1State.pulseVisible) pulseToggleBeat.restart()
                             }
                         }
                     }
@@ -371,7 +419,7 @@ Application {
                         Connections {
                             target: root
                             function onBeat() {
-                                if (page1State.pulseVisible) colorCycleBeat.restart()
+                                if (page1.settled && page1State.pulseVisible) colorCycleBeat.restart()
                             }
                         }
                     }
@@ -419,7 +467,7 @@ Application {
                         Connections {
                             target: root
                             function onBeat() {
-                                if (page1State.soundActive) soundToggleBeat.restart()
+                                if (page1.settled && page1State.soundActive) soundToggleBeat.restart()
                             }
                         }
                     }
@@ -470,7 +518,7 @@ Application {
                         Connections {
                             target: root
                             function onBeat() {
-                                if (page1State.hapticActive) hapticToggleBeat.restart()
+                                if (page1.settled && page1State.hapticActive) hapticToggleBeat.restart()
                             }
                         }
                     }
@@ -514,7 +562,7 @@ Application {
                     Connections {
                         target: root
                         function onBeat() {
-                            if (page1State.pulseVisible) pulseBigAnim.restart()
+                            if (page1.settled && page1State.pulseVisible) pulseBigAnim.restart()
                         }
                     }
                 }
@@ -558,15 +606,11 @@ Application {
                     volume: 1.0
                 }
 
-                // Cuts the single-play preview after 1 s
                 Timer {
                     id: singlePlayStop
                     interval: 1000
                     repeat:   false
-                    onTriggered: {
-                        tone.stop()
-                        // 1s preview never sets loopActive, nothing to clear
-                    }
+                    onTriggered: tone.stop()
                 }
 
                 // Upper half: frequency name + value, tap to advance carousel
@@ -598,8 +642,6 @@ Application {
                         font.pixelSize: Dims.l(12)
                         opacity: 1.0
 
-                        // Pulses while loop is locked — upper-half feedback
-                        // when finger covers the play button
                         SequentialAnimation {
                             id: loopIndicator
                             running:  page2State.loopActive
@@ -634,8 +676,6 @@ Application {
                 }
 
                 // Lower half: play button
-                // tap  → 1 s preview (tap again to stop early)
-                // hold → lock infinite loop (tap to stop)
                 Item {
                     anchors.bottom:       parent.bottom
                     anchors.left:         parent.left
@@ -697,7 +737,6 @@ Application {
                                     tone.stop()
                                     page2State.loopActive = false
                                 } else {
-                                    // 1 s preview — does not keep screen awake
                                     tone.loops = 1
                                     tone.play()
                                     playingPulse.restart()
@@ -714,7 +753,6 @@ Application {
                                     playingPulse.restart()
                             }
 
-                            // Release does NOT stop the loop — next tap does.
                             onReleased: {
                                 if (holdActive) holdActive = false
                             }
@@ -739,8 +777,12 @@ Application {
         }
     }
 
+    // PageHeader fades out on the metronome page while pulseVisible is active
+    // so the full-screen flash can reach every pixel unobstructed.
     PageHeader {
         text: root.pageTitles[pageView.currentIndex]
+        opacity: (pageView.currentIndex === 1 && page1State.pulseVisible) ? 0.0 : 1.0
+        Behavior on opacity { NumberAnimation { duration: 300; easing.type: Easing.InOutQuad } }
     }
 
     PageDot {
