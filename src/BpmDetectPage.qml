@@ -39,6 +39,7 @@ Item {
     property real lastTap:   0
     property var  intervals: []
     property int  tapCount:  0
+    property int  consecutiveOutliers: 0
     property string turntableState: beatOffsetLocked ? "locked" : "idle"
 
 
@@ -108,6 +109,7 @@ Item {
             settleTimer.restart()
             indicatorRight.animate()
         } else {
+            consecutiveOutliers = 0
             sessionActive = false
             settleTimer.stop()
             settled   = false
@@ -482,11 +484,11 @@ Item {
                 var now = new Date().getTime()
 
                 if (page.lastTap > 0 && (now - page.lastTap) > page.sessionBreakMs) {
-                    page.intervals     = []
-                    page.lastTap       = 0
-                    page.statSpreadMin = 0
-                    page.statSpreadMax = 0
-                    // dots intentionally left to complete their journey
+                    page.intervals          = []
+                    page.lastTap            = 0
+                    page.statSpreadMin      = 0
+                    page.statSpreadMax      = 0
+                    page.consecutiveOutliers = 0
                 }
 
                 page.tapCount++
@@ -498,19 +500,49 @@ Item {
 
                 if (page.lastTap > 0) {
                     var delta = now - page.lastTap
+
+                    // ── Outlier detection ──────────────────────────────────────
+                    var isOutlier = false
+                    if (page.intervals.length >= 2) {
+                        var sum = 0
+                        for (var k = 0; k < page.intervals.length; ++k) sum += page.intervals[k]
+                            var mean = sum / page.intervals.length
+                            isOutlier = Math.abs(delta - mean) > mean * 0.30
+                    }
+
+                    if (isOutlier) {
+                        page.consecutiveOutliers++
+                        if (page.consecutiveOutliers >= 2) {
+                            // Two in a row — intentional tempo change, reset window
+                            page.intervals           = [delta]
+                            page.consecutiveOutliers = 0
+                            page.statSpreadMin       = 0
+                            page.statSpreadMax       = 0
+                        }
+                        // Single outlier — dot spawns at drift position but BPM unchanged
+                        var expected = 60000.0 / page.bpmValue
+                        var drift    = Math.max(-1.0, Math.min(1.0,
+                                                               (delta - expected) / (expected * 0.75)))
+                        dotComponent.createObject(dotContainer, {drift: drift, isTap: true})
+                        page.lastTap = now
+                        return
+                    }
+
+                    // ── Clean interval — accepted ──────────────────────────────
+                    page.consecutiveOutliers = 0
                     page.intervals.push(delta)
                     if (page.intervals.length > 8) page.intervals.shift()
-                        var sum = 0
-                        for (var j = 0; j < page.intervals.length; ++j) sum += page.intervals[j]
-                            var bpm = Math.round(60000 / (sum / page.intervals.length))
+                        var sum2 = 0
+                        for (var j = 0; j < page.intervals.length; ++j) sum2 += page.intervals[j]
+                            var bpm = Math.round(60000 / (sum2 / page.intervals.length))
                             bpm = Math.max(page.bpmMin, Math.min(page.bpmMax, bpm))
                             page.bpmValueSet(bpm)
                             page.updateStats(delta, bpm)
 
-                            var expected = 60000.0 / bpm
-                            var drift    = Math.max(-1.0, Math.min(1.0,
-                                                                   (delta - expected) / (expected * 0.75)))
-                            dotComponent.createObject(dotContainer, {drift: drift, isTap: true})
+                            var expected2 = 60000.0 / bpm
+                            var drift2    = Math.max(-1.0, Math.min(1.0,
+                                                                    (delta - expected2) / (expected2 * 0.75)))
+                            dotComponent.createObject(dotContainer, {drift: drift2, isTap: true})
                 }
 
                 page.lastTap = now
