@@ -77,8 +77,7 @@ Application {
     ]
 
     readonly property var pulseColors: [
-        "#FF69B4", "#C5FCE4", "#FF4B0A",
-        "#FFEC1F", "#0ABAFF", "#98D831"
+        "#FF69B4", "#0ABAFF", "#C5FCE4", "#FF6700", "#A1DB43", "#FF4B0A", "#FFEC1F", "#D75BBE", "#CCFF66"
     ]
 
     readonly property string pulseColor: pulseColors[colorConfig.value]
