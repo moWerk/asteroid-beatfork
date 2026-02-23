@@ -54,9 +54,9 @@ Item {
     property int  statSpreadMax:   0
     property int  statMsPerBeat:   0
 
-    function updateStats(delta, bpm) {
-        statPreciseBpm  = Math.round(60000.0 / delta * 10) / 10
-        statConfidence  = intervals.length
+function updateStats(delta, bpm, avgInterval) {
+        statPreciseBpm  = Math.round(60000.0 / avgInterval * 10) / 10
+        statConfidence  = Math.min(8, intervals.length + 1)
         statMsPerBeat   = Math.round(60000.0 / bpm)
         statDriftMs     = Math.round(delta - (60000.0 / bpm))
         if (intervals.length > 1) {
@@ -110,6 +110,7 @@ Item {
             indicatorRight.animate()
         } else {
             consecutiveOutliers = 0
+            statConfidence      = 0
             sessionActive = false
             settleTimer.stop()
             settled   = false
@@ -493,8 +494,11 @@ Item {
 
                 page.tapCount++
                 page.sessionActive = true
+                page.statConfidence      = 0
+                page.consecutiveOutliers = 0
 
                 if (page.lastTap === 0) {
+                    page.statConfidence = 1
                     dotComponent.createObject(dotContainer, {drift: 0.0, isTap: true})
                 }
 
@@ -511,15 +515,25 @@ Item {
                     }
 
                     if (isOutlier) {
-                        page.consecutiveOutliers++
-                        if (page.consecutiveOutliers >= 2) {
-                            // Two in a row — intentional tempo change, reset window
+                        // Check for half-time or double-time — immediate reset
+                        var isHarmonic = page.intervals.length >= 2 &&
+                        (Math.abs(delta - mean * 2.0) < mean * 0.30 ||
+                        Math.abs(delta - mean * 0.5) < mean * 0.15)
+
+                        if (isHarmonic) {
                             page.intervals           = [delta]
                             page.consecutiveOutliers = 0
                             page.statSpreadMin       = 0
                             page.statSpreadMax       = 0
+                        } else {
+                            page.consecutiveOutliers++
+                            if (page.consecutiveOutliers >= 2) {
+                                page.intervals           = [delta]
+                                page.consecutiveOutliers = 0
+                                page.statSpreadMin       = 0
+                                page.statSpreadMax       = 0
+                            }
                         }
-                        // Single outlier — dot spawns at drift position but BPM unchanged
                         var expected = 60000.0 / page.bpmValue
                         var drift    = Math.max(-1.0, Math.min(1.0,
                                                                (delta - expected) / (expected * 0.75)))
@@ -537,7 +551,7 @@ Item {
                             var bpm = Math.round(60000 / (sum2 / page.intervals.length))
                             bpm = Math.max(page.bpmMin, Math.min(page.bpmMax, bpm))
                             page.bpmValueSet(bpm)
-                            page.updateStats(delta, bpm)
+                            page.updateStats(delta, bpm, sum2 / page.intervals.length)
 
                             var expected2 = 60000.0 / bpm
                             var drift2    = Math.max(-1.0, Math.min(1.0,

@@ -293,7 +293,7 @@ Application {
         anchors.top:    parent.top
         height:         Dims.h(20)
         z: 100
-        enabled: pageView.currentIndex === 0 && page0.lastTap > 0
+        enabled: pageView.currentIndex === 0 && page0.sessionActive
         onClicked: page0.statsCycleTap++
     }
 }
