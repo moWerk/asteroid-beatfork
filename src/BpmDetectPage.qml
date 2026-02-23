@@ -19,6 +19,7 @@ Item {
     property int    bpmMin:         40
     property int    bpmMax:         208
     property int    sessionBreakMs: 1500
+    property bool   sessionActive: false
     property string pulseColor:     "#00ff00"
     property string tapDotColor:    "#ff69b4"
     property var    beatSource
@@ -26,7 +27,11 @@ Item {
     onStatsCycleTapChanged: {
         if (lastTap > 0) statsIndex = (statsIndex + 1) % statCount
     }
+    property int  beatOffset:       0
+    property bool beatOffsetLocked: false
 
+    signal beatOffsetDelta(int ms)
+    signal beatOffsetLockToggle()
     signal bpmValueSet(int bpm)
 
     // ── State ─────────────────────────────────────────────────────────────────
@@ -34,6 +39,8 @@ Item {
     property real lastTap:   0
     property var  intervals: []
     property int  tapCount:  0
+    property string turntableState: beatOffsetLocked ? "locked" : "idle"
+
 
     // ── Stats — frozen on each tap, persist after tapping stops ───────────────
     property int  statsIndex:    0
@@ -80,6 +87,13 @@ Item {
         }
     }
 
+    function statusOrStats() {
+        if (beatOffsetLocked)             return "locked"
+            if (turntableState === "braking") return "braking"
+                if (turntableState === "pushing") return "pushing"
+                    return statsText()
+    }
+
     // ── Ring geometry ─────────────────────────────────────────────────────────
     readonly property real ringRadius:   Dims.l(35)
     readonly property real borderCenter: ringRadius - Dims.l(0.5)
@@ -94,6 +108,7 @@ Item {
             settleTimer.restart()
             indicatorRight.animate()
         } else {
+            sessionActive = false
             settleTimer.stop()
             settled   = false
             lastTap   = 0
@@ -111,6 +126,17 @@ Item {
         repeat:   false
         onTriggered: page.settled = true
     }
+
+    // Auto-reset braking/pushing label back to stats after brief display
+    Timer {
+        id: turntableStateReset
+        interval: 600
+        repeat:   false
+        onTriggered: if (page.turntableState !== "locked") page.turntableState = "idle"
+    }
+
+    Timer { id: brakeChevronReset; interval: 300; onTriggered: brakeChevron.opacity = 0.8 }
+    Timer { id: pushChevronReset;  interval: 300; onTriggered: pushChevron.opacity  = 0.8 }
 
     // ── Edge indicator ────────────────────────────────────────────────────────
     Indicator { id: indicatorRight; edge: Qt.RightEdge }
@@ -147,12 +173,14 @@ Item {
                 to:          page.exitAngle
                 duration:    page.fullRevMs
                 running:     true
+                paused:      page.beatOffsetLocked
                 easing.type: Easing.Linear
                 onRunningChanged: if (!running) dot.destroy()
             }
 
             SequentialAnimation {
                 running: true
+                paused:  page.beatOffsetLocked
                 PauseAnimation  { duration: page.fullRevMs * 0.65 }
                 NumberAnimation {
                     target:      dotRect
@@ -161,6 +189,117 @@ Item {
                     duration:    page.fullRevMs * 0.20
                     easing.type: Easing.InQuad
                 }
+            }
+        }
+    }
+
+    // ── Pause icon — behind pulseSmall and dots, suggests lock zone ───────────
+    Row {
+        id: pauseIcon
+        anchors.verticalCenter:         pulseSmall.bottom
+        anchors.verticalCenterOffset:   -Dims.l(1)
+        anchors.horizontalCenter:       pulseSmall.horizontalCenter
+        spacing: Dims.l(4)
+        z: 0
+        opacity: page.beatOffsetLocked ? 0.8 : 0.5
+        Behavior on opacity { NumberAnimation { duration: 200 } }
+
+        Rectangle {
+            width:  Dims.l(2.5)
+            height: Dims.l(10)
+            radius: Dims.l(1)
+            color:  page.tapDotColor
+        }
+        Rectangle {
+            width:  Dims.l(2.5)
+            height: Dims.l(10)
+            radius: Dims.l(1)
+            color:  page.tapDotColor
+        }
+    }
+
+    // ── Brake chevron — left of ring, clockwise orientation ───────────────────
+    Item {
+        id: brakeChevron
+        anchors.verticalCenter:         pulseSmall.bottom
+        anchors.verticalCenterOffset:   Dims.l(-1)
+        anchors.horizontalCenter:       pulseSmall.left
+        anchors.horizontalCenterOffset: Dims.l(1)
+        width:  Dims.l(8)
+        height: Dims.l(8)
+        z: 0
+        opacity: 0.5
+
+        property real travel: 0.0
+        transform: Translate {
+            x: Math.cos((-135) * Math.PI / 180) * brakeChevron.travel
+            y: Math.sin((-135) * Math.PI / 180) * brakeChevron.travel
+        }
+
+        SequentialAnimation on travel {
+            loops: Animation.Infinite
+            NumberAnimation { to: Dims.l(4);    duration: 600; easing.type: Easing.InOutSine }
+            NumberAnimation { to: Dims.l(-8);   duration: 1200; easing.type: Easing.InOutSine }
+        }
+
+        // ‹ pointing upper-left — two rects forming chevron, whole item rotated -135°
+        Item {
+            anchors.centerIn: parent
+            rotation: -135
+            Rectangle {
+                width:  Dims.l(1.5); height: Dims.l(4.5)
+                radius: Dims.l(0.5); color:  page.tapDotColor
+                x: Dims.l(1.5); y: 0
+                rotation: -40; transformOrigin: Item.Bottom
+            }
+            Rectangle {
+                width:  Dims.l(1.5); height: Dims.l(4.5)
+                radius: Dims.l(0.5); color:  page.tapDotColor
+                x: Dims.l(1.5); y: Dims.l(3)
+                rotation: 40; transformOrigin: Item.Top
+            }
+        }
+    }
+
+    // ── Push chevron — right of ring, counter-clockwise orientation ───────────
+    Item {
+        id: pushChevron
+        anchors.verticalCenter:         pulseSmall.bottom
+        anchors.verticalCenterOffset:   Dims.l(-6.4)
+        anchors.horizontalCenter:       pulseSmall.right
+        anchors.horizontalCenterOffset: Dims.l(-6.4)
+        width:  Dims.l(8)
+        height: Dims.l(8)
+        z: 0
+        opacity: 0.5
+
+        property real travel: 0.0
+        transform: Translate {
+            x: Math.cos((-45) * Math.PI / 180) * pushChevron.travel
+            y: Math.sin((-45) * Math.PI / 180) * pushChevron.travel
+        }
+
+        SequentialAnimation on travel {
+            loops: Animation.Infinite
+            NumberAnimation { to: Dims.l(4);    duration: 600; easing.type: Easing.InOutSine }
+            NumberAnimation { to: Dims.l(-8);   duration: 1200; easing.type: Easing.InOutSine }
+        }
+
+        // › pointing upper-right — brake mirrored, inner item rotated 45°
+        Item {
+            anchors.centerIn: parent
+            rotation: -45
+            Rectangle {
+                width:  Dims.l(1.5); height: Dims.l(4.5)
+                radius: Dims.l(0.5); color:  page.tapDotColor
+                x: Dims.l(1.5); y: 0
+                rotation: -40; transformOrigin: Item.Bottom
+            }
+            Rectangle {
+                width:  Dims.l(1.5); height: Dims.l(4.5)
+                radius: Dims.l(0.5); color:  page.tapDotColor
+                x: Dims.l(1.5); y: Dims.l(3)
+                rotation: 40; transformOrigin: Item.Top
             }
         }
     }
@@ -267,7 +406,7 @@ Item {
         z: 3
         //% "Tap"
         text:    qsTrId("id-tap")
-        visible: page.lastTap === 0
+        visible: !page.sessionActive
         opacity: 0.4
         font {
             pixelSize: Dims.l(9)
@@ -295,8 +434,8 @@ Item {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.topMargin:        Dims.h(9)
         z: 3
-        visible: page.lastTap > 0
-        text:    page.statsText()
+        visible: page.sessionActive
+        text: page.statusOrStats()
         opacity: 0.8
         font {
             pixelSize: Dims.l(8)
@@ -351,6 +490,7 @@ Item {
                 }
 
                 page.tapCount++
+                page.sessionActive = true
 
                 if (page.lastTap === 0) {
                     dotComponent.createObject(dotContainer, {drift: 0.0, isTap: true})
@@ -380,9 +520,10 @@ Item {
 
     // ── Tempo name ────────────────────────────────────────────────────────────
     Label {
+        id: tempoNameLabel
         anchors.bottom:           pulseSmall.bottom
         anchors.horizontalCenter: parent.horizontalCenter
-        anchors.bottomMargin:     Dims.h(8)
+        anchors.bottomMargin:     Dims.h(9)
         z: 3
         text: {
             var bpm = page.bpmValue
@@ -403,5 +544,53 @@ Item {
             family:    "Noto Sans Condensed"
         }
         opacity: 0.8
+    }
+
+    // ── Turntable zones — below BPM label, 40/20/40 horizontal split ──────────
+    MouseArea {
+        id: brakeZone
+        anchors.left:   parent.left
+        anchors.top:    tempoNameLabel.top
+        anchors.bottom: parent.bottom
+        width: parent.width * 0.40
+        z: 4
+        onClicked: {
+            page.sessionActive  = true
+            page.turntableState = "braking"
+            page.beatOffsetDelta(5)
+            turntableStateReset.restart()
+            brakeChevron.opacity = 0.8
+            brakeChevronReset.restart()
+        }
+    }
+
+    MouseArea {
+        id: lockZone
+        anchors.left:         brakeZone.right
+        anchors.top:          tempoNameLabel.bottom
+        anchors.bottom:       parent.bottom
+        width: parent.width * 0.20
+        z: 4
+        onClicked: {
+            page.sessionActive = true
+            page.beatOffsetLockToggle()
+        }
+    }
+
+    MouseArea {
+        id: pushZone
+        anchors.right:  parent.right
+        anchors.top:    tempoNameLabel.top
+        anchors.bottom: parent.bottom
+        width: parent.width * 0.40
+        z: 4
+        onClicked: {
+            page.sessionActive  = true
+            page.turntableState = "pushing"
+            page.beatOffsetDelta(-5)
+            turntableStateReset.restart()
+            pushChevron.opacity = 0.9
+            pushChevronReset.restart()
+        }
     }
 }

@@ -48,6 +48,9 @@ Application {
     readonly property int flashDuration:    200
     readonly property int sessionBreakMs:   1500
 
+    property int  beatOffset:       0      // signed ms, added to beatTimer interval
+    property bool beatOffsetLocked: false  // true = decay paused, offset held
+
     property var bpmModel: {
         var arr = []
         for (var i = bpmMin; i <= bpmMax; ++i) arr.push(i)
@@ -124,18 +127,34 @@ Application {
 
     Timer {
         id: beatTimer
-        interval:         Math.round(60000 / bpmConfig.value)
+        interval:         Math.max(1, Math.round(60000 / bpmConfig.value))
         repeat:           true
-        running:          true
+        running:          !app.beatOffsetLocked
         triggeredOnStart: false
-        onTriggered:      app.beatFlash()
+        onTriggered: {
+            app.beatFlash()
+            // Apply offset only here — never via binding, never resets countdown
+            interval = Math.max(1, Math.round(60000 / bpmConfig.value) + app.beatOffset)
+        }
     }
 
     Connections {
         target: bpmConfig
         function onValueChanged() {
-            beatTimer.interval = Math.round(60000 / bpmConfig.value)
+            beatTimer.interval = Math.max(1, Math.round(60000 / bpmConfig.value) + app.beatOffset)
             beatTimer.restart()
+        }
+    }
+
+    // Decay — nudges offset toward 0 by 3ms every 80ms when not locked
+    Timer {
+        id: offsetDecayTimer
+        interval: 80
+        repeat:   true
+        running:  !app.beatOffsetLocked && app.beatOffset !== 0
+        onTriggered: {
+            if      (app.beatOffset > 0) app.beatOffset = Math.max(0, app.beatOffset - 10)
+                else if (app.beatOffset < 0) app.beatOffset = Math.min(0, app.beatOffset + 10)
         }
     }
 
@@ -187,6 +206,15 @@ Application {
                 beatSource:     app
                 onBpmValueSet:  bpmConfig.value = bpm
                 tapDotColor:    app.pulseColors[(colorConfig.value + 1) % app.pulseColors.length]
+                beatOffset:       app.beatOffset
+                beatOffsetLocked: app.beatOffsetLocked
+                onBeatOffsetDelta: {
+                    app.beatOffset = Math.max(-300, Math.min(300, app.beatOffset + ms))
+                }
+                onBeatOffsetLockToggle: {
+                    app.beatOffsetLocked = !app.beatOffsetLocked
+                    if (!app.beatOffsetLocked) app.beatFlash()  // instant dot on release
+                }
             }
 
             // Stats cycler overlay — sits above PageHeader for page 0
