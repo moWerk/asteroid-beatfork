@@ -20,8 +20,12 @@ Item {
     property int    bpmMax:         208
     property int    sessionBreakMs: 1500
     property string pulseColor:     "#00ff00"
-    property string tapDotColor:    "#ff69b4"   // pulseColors[colorIndex+1] from main
+    property string tapDotColor:    "#ff69b4"
     property var    beatSource
+    property int statsCycleTap: 0
+    onStatsCycleTapChanged: {
+        if (lastTap > 0) statsIndex = (statsIndex + 1) % statCount
+    }
 
     signal bpmValueSet(int bpm)
 
@@ -31,12 +35,58 @@ Item {
     property var  intervals: []
     property int  tapCount:  0
 
-    readonly property real ringRadius: Dims.l(35)
-    readonly property real borderCenter:      ringRadius - Dims.l(0.5)
-    readonly property real driftExtent:   ringRadius * 0.50
-    readonly property real entryAngle:   -45.0
-    readonly property real exitAngle:    -405.0
-    readonly property int  fullRevMs:    Math.round(8.6 * (60000 / bpmValue))
+    // ── Stats — frozen on each tap, persist after tapping stops ───────────────
+    property int  statsIndex:    0
+    readonly property int statCount: 6
+    property real statPreciseBpm:  0.0
+    property int  statConsistency: 0
+    property int  statDriftMs:     0
+    property int  statConfidence:  0
+    property int  statSpreadMin:   0
+    property int  statSpreadMax:   0
+    property int  statMsPerBeat:   0
+
+    function updateStats(delta, bpm) {
+        statPreciseBpm  = Math.round(60000.0 / delta * 10) / 10
+        statConfidence  = intervals.length
+        statMsPerBeat   = Math.round(60000.0 / bpm)
+        statDriftMs     = Math.round(delta - (60000.0 / bpm))
+        if (intervals.length > 1) {
+            var mean = 0
+            for (var i = 0; i < intervals.length; i++) mean += intervals[i]
+                mean /= intervals.length
+                var variance = 0
+                for (var j = 0; j < intervals.length; j++)
+                    variance += Math.pow(intervals[j] - mean, 2)
+                    var stddev = Math.sqrt(variance / intervals.length)
+                    statConsistency = Math.max(0, Math.min(100,
+                                                           Math.round(100 - (stddev / mean) * 100)))
+        } else {
+            statConsistency = 0
+        }
+        if (statSpreadMin === 0 || bpm < statSpreadMin) statSpreadMin = bpm
+            if (bpm > statSpreadMax) statSpreadMax = bpm
+    }
+
+    function statsText() {
+        switch (statsIndex) {
+            case 0: return statConsistency + "%"
+            case 1: return statPreciseBpm.toFixed(1) + " bpm"
+            case 2: return (statDriftMs >= 0 ? "+" : "") + statDriftMs + " ms"
+            case 3: return statConfidence + " of 8"
+            case 4: return statSpreadMin + "–" + statSpreadMax
+            case 5: return statMsPerBeat + " ms/beat"
+            default: return ""
+        }
+    }
+
+    // ── Ring geometry ─────────────────────────────────────────────────────────
+    readonly property real ringRadius:   Dims.l(35)
+    readonly property real borderCenter: ringRadius - Dims.l(0.5)
+    readonly property real driftExtent:  ringRadius * 0.50
+    readonly property real entryAngle:  -45.0
+    readonly property real exitAngle:   -405.0
+    readonly property int  fullRevMs:   Math.round(8.6 * (60000 / bpmValue))
 
     property bool pageActive: false
     onPageActiveChanged: {
@@ -73,7 +123,7 @@ Item {
             property real  drift:    0.0
             property bool  isTap:    false
             property color dotColor: isTap ? page.tapDotColor : page.pulseColor
-            z: isTap ? 2 : 1
+            z:      isTap ? 2 : 1
             parent: dotContainer
 
             readonly property real r: page.borderCenter + drift * page.driftExtent
@@ -92,9 +142,7 @@ Item {
                 opacity: 0.7
             }
 
-            // Travel counter-clockwise one full revolution
             NumberAnimation on angle {
-                id: angleAnim
                 from:        page.entryAngle
                 to:          page.exitAngle
                 duration:    page.fullRevMs
@@ -103,15 +151,14 @@ Item {
                 onRunningChanged: if (!running) dot.destroy()
             }
 
-            // Fade over second half, gone well before re-entering entry zone
             SequentialAnimation {
                 running: true
-                PauseAnimation   { duration: page.fullRevMs * 0.65 }
-                NumberAnimation  {
-                    target:   dotRect
-                    property: "opacity"
-                    to:       0.0
-                    duration: page.fullRevMs * 0.20
+                PauseAnimation  { duration: page.fullRevMs * 0.65 }
+                NumberAnimation {
+                    target:      dotRect
+                    property:    "opacity"
+                    to:          0.0
+                    duration:    page.fullRevMs * 0.20
                     easing.type: Easing.InQuad
                 }
             }
@@ -142,6 +189,7 @@ Item {
             function onBeat() {
                 if (!page.settled) return
                     pulseSmallAnim.restart()
+                    labelColorFlash.restart()
                     dotComponent.createObject(dotContainer, {drift: 0.0, isTap: false})
             }
         }
@@ -210,8 +258,9 @@ Item {
         }
     }
 
-    // ── Tap hint ──────────────────────────────────────────────────────────────
+    // ── Tap hint — visible before first tap, pulses with beat ─────────────────
     Label {
+        id: tapHint
         anchors.top:              pulseSmall.top
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.topMargin:        Dims.h(7)
@@ -219,14 +268,43 @@ Item {
         //% "Tap"
         text:    qsTrId("id-tap")
         visible: page.lastTap === 0
-        opacity: 0.6
+        opacity: 0.4
         font {
             pixelSize: Dims.l(9)
             weight:    Font.Bold
         }
+
+        SequentialAnimation {
+            id: tapHintPulse
+            NumberAnimation { target: tapHint; property: "opacity"; to: 0.9; duration: 10;  easing.type: Easing.Linear }
+            NumberAnimation { target: tapHint; property: "opacity"; to: 0.4; duration: 340; easing.type: Easing.InQuad }
+        }
+
+        Connections {
+            target: page.beatSource
+            function onBeat() {
+                if (page.settled && page.lastTap === 0) tapHintPulse.restart()
+            }
+        }
     }
 
-    // ── BPM label ─────────────────────────────────────────────────────────────
+    // ── Stats cycler — replaces tap hint after first tap ──────────────────────
+    Label {
+        id: statsCycler
+        anchors.top:              pulseSmall.top
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.topMargin:        Dims.h(9)
+        z: 3
+        visible: page.lastTap > 0
+        text:    page.statsText()
+        opacity: 0.8
+        font {
+            pixelSize: Dims.l(8)
+            family:    "Noto Sans Condensed"
+        }
+    }
+
+    // ── BPM label — tap target only ───────────────────────────────────────────
     Label {
         id: bpmLabel
         anchors.centerIn: parent
@@ -243,13 +321,60 @@ Item {
 
         SequentialAnimation {
             id: labelPump
-            NumberAnimation { target: bpmLabel; property: "scale"; to: 1.2; duration: 45;  easing.type: Easing.InQuad  }
+            NumberAnimation { target: bpmLabel; property: "scale"; to: 1.4; duration: 45;  easing.type: Easing.InQuad  }
             NumberAnimation { target: bpmLabel; property: "scale"; to: 1.0; duration: 90;  easing.type: Easing.OutQuad }
+        }
+
+        SequentialAnimation {
+            id: labelColorFlash
+            ColorAnimation { target: bpmLabel; property: "color"; to: page.pulseColor; duration: 10;  easing.type: Easing.Linear }
+            ColorAnimation { target: bpmLabel; property: "color"; to: "#ffffff";       duration: 340; easing.type: Easing.InQuad }
         }
 
         Connections {
             target: page
             function onTapCountChanged() { labelPump.restart() }
+        }
+
+        MouseArea {
+            anchors.fill: parent
+            z: 4
+            onClicked: {
+                var now = new Date().getTime()
+
+                if (page.lastTap > 0 && (now - page.lastTap) > page.sessionBreakMs) {
+                    page.intervals     = []
+                    page.lastTap       = 0
+                    page.statSpreadMin = 0
+                    page.statSpreadMax = 0
+                    // dots intentionally left to complete their journey
+                }
+
+                page.tapCount++
+
+                if (page.lastTap === 0) {
+                    dotComponent.createObject(dotContainer, {drift: 0.0, isTap: true})
+                }
+
+                if (page.lastTap > 0) {
+                    var delta = now - page.lastTap
+                    page.intervals.push(delta)
+                    if (page.intervals.length > 8) page.intervals.shift()
+                        var sum = 0
+                        for (var j = 0; j < page.intervals.length; ++j) sum += page.intervals[j]
+                            var bpm = Math.round(60000 / (sum / page.intervals.length))
+                            bpm = Math.max(page.bpmMin, Math.min(page.bpmMax, bpm))
+                            page.bpmValueSet(bpm)
+                            page.updateStats(delta, bpm)
+
+                            var expected = 60000.0 / bpm
+                            var drift    = Math.max(-1.0, Math.min(1.0,
+                                                                   (delta - expected) / (expected * 0.75)))
+                            dotComponent.createObject(dotContainer, {drift: drift, isTap: true})
+                }
+
+                page.lastTap = now
+            }
         }
     }
 
@@ -278,41 +403,5 @@ Item {
             family:    "Noto Sans Condensed"
         }
         opacity: 0.8
-    }
-
-    // ── Tap area ──────────────────────────────────────────────────────────────
-    MouseArea {
-        anchors.fill: parent
-        z: 4
-        onClicked: {
-            var now = new Date().getTime()
-
-            if (page.lastTap > 0 && (now - page.lastTap) > page.sessionBreakMs) {
-                page.intervals = []
-                page.lastTap   = 0
-                for (var k = dotContainer.children.length - 1; k >= 0; k--)
-                    dotContainer.children[k].destroy()
-            }
-
-            page.tapCount++
-
-            if (page.lastTap > 0) {
-                var delta = now - page.lastTap
-                page.intervals.push(delta)
-                if (page.intervals.length > 8) page.intervals.shift()
-                    var sum = 0
-                    for (var j = 0; j < page.intervals.length; ++j) sum += page.intervals[j]
-                        var bpm = Math.round(60000 / (sum / page.intervals.length))
-                        bpm = Math.max(page.bpmMin, Math.min(page.bpmMax, bpm))
-                        page.bpmValueSet(bpm)
-
-                        var expected = 60000.0 / bpm
-                        var drift    = Math.max(-1.0, Math.min(1.0,
-                                                               (delta - expected) / (expected * 0.75)))
-                        dotComponent.createObject(dotContainer, {drift: drift, isTap: true})
-            }
-
-            page.lastTap = now
-        }
     }
 }

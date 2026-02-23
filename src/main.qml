@@ -175,6 +175,7 @@ Application {
             height: pageView.height
 
             BpmDetectPage {
+                id: page0
                 anchors.fill:   parent
                 visible:        index === 0
                 pageActive:     pageView.currentIndex === 0
@@ -186,6 +187,17 @@ Application {
                 beatSource:     app
                 onBpmValueSet:  bpmConfig.value = bpm
                 tapDotColor:    app.pulseColors[(colorConfig.value + 1) % app.pulseColors.length]
+            }
+
+            // Stats cycler overlay — sits above PageHeader for page 0
+            MouseArea {
+                anchors.top:    parent.top
+                anchors.left:   parent.left
+                anchors.right:  parent.right
+                height:         Dims.h(20)
+                z: 100
+                enabled: pageView.currentIndex === 0
+                onClicked: page0.statsCycleTap++
             }
 
             MetronomePage {
@@ -235,6 +247,8 @@ Application {
         Behavior on opacity { NumberAnimation { duration: 300; easing.type: Easing.InOutQuad } }
     }
 
+
+
     PageDot {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom:           parent.bottom
@@ -242,5 +256,16 @@ Application {
         height:       Dims.h(3)
         dotNumber:    DeviceSpecs.hasSpeaker ? 3 : 2
         currentIndex: pageView.currentIndex
+    }
+
+    // Stats cycler tap zone — overlays PageHeader on page 0
+    MouseArea {
+        anchors.left:   parent.left
+        anchors.right:  parent.right
+        anchors.top:    parent.top
+        height:         Dims.h(20)
+        z: 100
+        enabled: pageView.currentIndex === 0 && page0.lastTap > 0
+        onClicked: page0.statsCycleTap++
     }
 }
