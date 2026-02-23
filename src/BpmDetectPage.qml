@@ -20,15 +20,23 @@ Item {
     property int    bpmMax:         208
     property int    sessionBreakMs: 1500
     property string pulseColor:     "#00ff00"
+    property string tapDotColor:    "#ff69b4"   // pulseColors[colorIndex+1] from main
     property var    beatSource
 
     signal bpmValueSet(int bpm)
 
-    // ── Settle guard ──────────────────────────────────────────────────────────
+    // ── State ─────────────────────────────────────────────────────────────────
     property bool settled:   false
     property real lastTap:   0
     property var  intervals: []
     property int  tapCount:  0
+
+    readonly property real ringRadius: Dims.l(35)
+    readonly property real borderCenter:      ringRadius - Dims.l(0.5)
+    readonly property real driftExtent:   ringRadius * 0.50
+    readonly property real entryAngle:   -45.0
+    readonly property real exitAngle:    -405.0
+    readonly property int  fullRevMs:    Math.round(8.6 * (60000 / bpmValue))
 
     property bool pageActive: false
     onPageActiveChanged: {
@@ -37,9 +45,13 @@ Item {
             indicatorRight.animate()
         } else {
             settleTimer.stop()
-            settled = false
+            settled   = false
+            lastTap   = 0
+            intervals = []
             pulseSmallAnim.stop()
             pulseSmall.opacity = 0.0
+            for (var i = dotContainer.children.length - 1; i >= 0; i--)
+                dotContainer.children[i].destroy()
         }
     }
 
@@ -53,16 +65,69 @@ Item {
     // ── Edge indicator ────────────────────────────────────────────────────────
     Indicator { id: indicatorRight; edge: Qt.RightEdge }
 
-    // ── Beat circle ───────────────────────────────────────────────────────────
+    // ── Dot component ─────────────────────────────────────────────────────────
+    Component {
+        id: dotComponent
+        Item {
+            id: dot
+            property real  drift:    0.0
+            property bool  isTap:    false
+            property color dotColor: isTap ? page.tapDotColor : page.pulseColor
+            z: isTap ? 2 : 1
+            parent: dotContainer
+
+            readonly property real r: page.borderCenter + drift * page.driftExtent
+
+            property real angle: page.entryAngle
+            x: Math.sin(angle * Math.PI / 180) * r
+            y: -Math.cos(angle * Math.PI / 180) * r
+
+            Rectangle {
+                id: dotRect
+                anchors.centerIn: parent
+                width:   dot.isTap ? Dims.l(6) : Dims.l(5)
+                height:  width
+                radius:  width / 2
+                color:   dot.dotColor
+                opacity: 0.7
+            }
+
+            // Travel counter-clockwise one full revolution
+            NumberAnimation on angle {
+                id: angleAnim
+                from:        page.entryAngle
+                to:          page.exitAngle
+                duration:    page.fullRevMs
+                running:     true
+                easing.type: Easing.Linear
+                onRunningChanged: if (!running) dot.destroy()
+            }
+
+            // Fade over second half, gone well before re-entering entry zone
+            SequentialAnimation {
+                running: true
+                PauseAnimation   { duration: page.fullRevMs * 0.65 }
+                NumberAnimation  {
+                    target:   dotRect
+                    property: "opacity"
+                    to:       0.0
+                    duration: page.fullRevMs * 0.20
+                    easing.type: Easing.InQuad
+                }
+            }
+        }
+    }
+
+    // ── Beat circle — reference ring + pump ───────────────────────────────────
     Rectangle {
         id: pulseSmall
         anchors.centerIn: parent
-        width:   Dims.l(70)
+        width:   page.ringRadius * 2
         height:  width
         radius:  width / 2
         color:   "transparent"
         border.color: page.pulseColor
-        border.width: Dims.l(4)
+        border.width: Dims.l(1)
         opacity: 0.0
         z: 0
 
@@ -75,16 +140,27 @@ Item {
         Connections {
             target: page.beatSource
             function onBeat() {
-                if (page.settled) pulseSmallAnim.restart()
+                if (!page.settled) return
+                    pulseSmallAnim.restart()
+                    dotComponent.createObject(dotContainer, {drift: 0.0, isTap: false})
             }
         }
     }
 
-    // ── Ripple rings — start close to BPM label, expand to screen edge ────────
+    // ── Dot container ─────────────────────────────────────────────────────────
+    Item {
+        id: dotContainer
+        anchors.centerIn: parent
+        width:  0
+        height: 0
+        z: 1
+    }
+
+    // ── Ripple rings on tap ───────────────────────────────────────────────────
     Rectangle {
         id: ripple1
         anchors.centerIn: parent
-        width:   pulseSmall.width
+        width:   Dims.l(70)
         height:  width
         radius:  width / 2
         color:   "transparent"
@@ -92,11 +168,11 @@ Item {
         border.width: Dims.l(3)
         opacity: 0.0
         scale:   0.3
-        z: 1
+        z: 2
 
         ParallelAnimation {
             id: ripple1Anim
-            NumberAnimation { target: ripple1; property: "scale";   from: 0.4; to: 1.0; duration: 300; easing.type: Easing.OutQuad }
+            NumberAnimation { target: ripple1; property: "scale";   from: 0.4; to: 0.8; duration: 300; easing.type: Easing.OutQuad }
             NumberAnimation { target: ripple1; property: "opacity"; from: 0.6; to: 0.0; duration: 300; easing.type: Easing.InQuad  }
         }
 
@@ -109,7 +185,7 @@ Item {
     Rectangle {
         id: ripple2
         anchors.centerIn: parent
-        width:   pulseSmall.width
+        width:   Dims.l(70)
         height:  width
         radius:  width / 2
         color:   "transparent"
@@ -117,13 +193,13 @@ Item {
         border.width: Dims.l(2)
         opacity: 0.0
         scale:   0.3
-        z: 1
+        z: 2
 
         SequentialAnimation {
             id: ripple2Anim
             PauseAnimation { duration: 80 }
             ParallelAnimation {
-                NumberAnimation { target: ripple2; property: "scale";   from: 0.4; to: 0.9; duration: 250; easing.type: Easing.OutQuad }
+                NumberAnimation { target: ripple2; property: "scale";   from: 0.4; to: 0.7; duration: 250; easing.type: Easing.OutQuad }
                 NumberAnimation { target: ripple2; property: "opacity"; from: 0.5; to: 0.0; duration: 250; easing.type: Easing.InQuad  }
             }
         }
@@ -139,11 +215,11 @@ Item {
         anchors.top:              pulseSmall.top
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.topMargin:        Dims.h(7)
-        z: 2
+        z: 3
         //% "Tap"
         text:    qsTrId("id-tap")
         visible: page.lastTap === 0
-        opacity: pulseSmall.opacity
+        opacity: 0.6
         font {
             pixelSize: Dims.l(9)
             weight:    Font.Bold
@@ -154,7 +230,7 @@ Item {
     Label {
         id: bpmLabel
         anchors.centerIn: parent
-        z: 2
+        z: 3
         text: page.bpmValue
         font {
             pixelSize: page.bpmValue >= 100 ? Dims.l(32) : Dims.l(36)
@@ -163,12 +239,12 @@ Item {
         }
         color:   "#ffffff"
         opacity: 0.9
-        scale: 1.0
+        scale:   1.0
 
         SequentialAnimation {
             id: labelPump
-            NumberAnimation { target: bpmLabel; property: "scale"; to: 1.4; duration: 45;  easing.type: Easing.InQuad }
-            NumberAnimation { target: bpmLabel; property: "scale"; to: 1.0; duration: 90; easing.type: Easing.OutQuad }
+            NumberAnimation { target: bpmLabel; property: "scale"; to: 1.2; duration: 45;  easing.type: Easing.InQuad  }
+            NumberAnimation { target: bpmLabel; property: "scale"; to: 1.0; duration: 90;  easing.type: Easing.OutQuad }
         }
 
         Connections {
@@ -182,7 +258,7 @@ Item {
         anchors.bottom:           pulseSmall.bottom
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottomMargin:     Dims.h(8)
-        z: 2
+        z: 3
         text: {
             var bpm = page.bpmValue
             if      (bpm < 60)  return "Largo"
@@ -201,24 +277,24 @@ Item {
             pixelSize: Dims.l(8)
             family:    "Noto Sans Condensed"
         }
-        opacity: 0.7
+        opacity: 0.8
     }
 
     // ── Tap area ──────────────────────────────────────────────────────────────
     MouseArea {
         anchors.fill: parent
-        z: 3
+        z: 4
         onClicked: {
             var now = new Date().getTime()
 
             if (page.lastTap > 0 && (now - page.lastTap) > page.sessionBreakMs) {
                 page.intervals = []
                 page.lastTap   = 0
+                for (var k = dotContainer.children.length - 1; k >= 0; k--)
+                    dotContainer.children[k].destroy()
             }
 
             page.tapCount++
-
-            var beatMs = 60000 / page.bpmValue
 
             if (page.lastTap > 0) {
                 var delta = now - page.lastTap
@@ -229,7 +305,11 @@ Item {
                         var bpm = Math.round(60000 / (sum / page.intervals.length))
                         bpm = Math.max(page.bpmMin, Math.min(page.bpmMax, bpm))
                         page.bpmValueSet(bpm)
-                        beatMs = 60000 / bpm
+
+                        var expected = 60000.0 / bpm
+                        var drift    = Math.max(-1.0, Math.min(1.0,
+                                                               (delta - expected) / (expected * 0.75)))
+                        dotComponent.createObject(dotContainer, {drift: drift, isTap: true})
             }
 
             page.lastTap = now

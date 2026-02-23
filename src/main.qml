@@ -185,6 +185,7 @@ Application {
                 pulseColor:     app.pulseColor
                 beatSource:     app
                 onBpmValueSet:  bpmConfig.value = bpm
+                tapDotColor:    app.pulseColors[(colorConfig.value + 1) % app.pulseColors.length]
             }
 
             MetronomePage {
