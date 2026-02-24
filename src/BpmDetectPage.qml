@@ -19,11 +19,12 @@ Item {
     property int    bpmMin:         40
     property int    bpmMax:         208
     property int    sessionBreakMs: 1500
-    property bool   sessionActive: false
+    property bool   sessionActive:  false
     property string pulseColor:     "#00ff00"
     property string tapDotColor:    "#ff69b4"
+    property int    rippleDur:      Math.min(300, Math.round(30000 / bpmValue))
     property var    beatSource
-    property int statsCycleTap: 0
+    property int    statsCycleTap:  0
     onStatsCycleTapChanged: {
         if (lastTap > 0) statsIndex = (statsIndex + 1) % statCount
     }
@@ -35,16 +36,15 @@ Item {
     signal bpmValueSet(int bpm)
 
     // ── State ─────────────────────────────────────────────────────────────────
-    property bool settled:   false
-    property real lastTap:   0
-    property var  intervals: []
-    property int  tapCount:  0
+    property bool settled:            false
+    property real lastTap:            0
+    property var  intervals:          []
+    property int  tapCount:           0
     property int  consecutiveOutliers: 0
-    property string turntableState: beatOffsetLocked ? "locked" : "idle"
+    property string turntableState:   beatOffsetLocked ? "locked" : "idle"
 
-
-    // ── Stats — frozen on each tap, persist after tapping stops ───────────────
-    property int  statsIndex:    0
+    // ── Stats ─────────────────────────────────────────────────────────────────
+    property int  statsIndex:      0
     readonly property int statCount: 6
     property real statPreciseBpm:  0.0
     property int  statConsistency: 0
@@ -54,7 +54,7 @@ Item {
     property int  statSpreadMax:   0
     property int  statMsPerBeat:   0
 
-function updateStats(delta, bpm, avgInterval) {
+    function updateStats(delta, bpm, avgInterval) {
         statPreciseBpm  = Math.round(60000.0 / avgInterval * 10) / 10
         statConfidence  = Math.min(8, intervals.length + 1)
         statMsPerBeat   = Math.round(60000.0 / bpm)
@@ -103,6 +103,23 @@ function updateStats(delta, bpm, avgInterval) {
     readonly property real exitAngle:   -405.0
     readonly property int  fullRevMs:   Math.round(8.6 * (60000 / bpmValue))
 
+    // ── Dot pool ──────────────────────────────────────────────────────────────
+    readonly property int poolSize: 24
+
+    function acquireDot(drift, isTap) {
+        for (var i = 0; i < dotPool.count; i++) {
+            var d = dotPool.itemAt(i)
+            if (d && !d.active) {
+                d.drift      = drift
+                d.isTap      = isTap
+                d.angle      = page.entryAngle
+                d.dotOpacity = 1.0
+                d.active     = true
+                return
+            }
+        }
+    }
+
     property bool pageActive: false
     onPageActiveChanged: {
         if (pageActive) {
@@ -111,26 +128,26 @@ function updateStats(delta, bpm, avgInterval) {
         } else {
             consecutiveOutliers = 0
             statConfidence      = 0
-            sessionActive = false
+            sessionActive       = false
             settleTimer.stop()
-            settled   = false
-            lastTap   = 0
-            intervals = []
-            pulseSmallAnim.stop()
-            pulseSmall.opacity = 0.0
-            for (var i = dotContainer.children.length - 1; i >= 0; i--)
-                dotContainer.children[i].destroy()
+            settled             = false
+            lastTap             = 0
+            intervals           = []
+            pulseSmall.opacity  = 0.0
+            for (var i = 0; i < dotPool.count; i++) {
+                var d = dotPool.itemAt(i)
+                if (d) d.active = false
+            }
         }
     }
 
     Timer {
         id: settleTimer
-        interval: 800
+        interval: 400
         repeat:   false
         onTriggered: page.settled = true
     }
 
-    // Auto-reset braking/pushing label back to stats after brief display
     Timer {
         id: turntableStateReset
         interval: 600
@@ -138,171 +155,88 @@ function updateStats(delta, bpm, avgInterval) {
         onTriggered: if (page.turntableState !== "locked") page.turntableState = "idle"
     }
 
-    Timer { id: brakeChevronReset; interval: 300; onTriggered: brakeChevron.opacity = 0.8 }
-    Timer { id: pushChevronReset;  interval: 300; onTriggered: pushChevron.opacity  = 0.8 }
+    // ── Turntable indicators — shared sequencer ───────────────────────────────
+    readonly property int indicatorCount: 5
+    property int          indicatorPhase: 0
+
+    function chevronOpacity(idx, phase) {
+        var trail = (phase - idx + indicatorCount) % indicatorCount
+        if (trail === 0) return 0.5
+            if (trail === 1) return 0.4
+                if (trail === 2) return 0.2
+                    if (trail === 3) return 0.1
+                        return 0
+    }
 
     // ── Edge indicator ────────────────────────────────────────────────────────
     Indicator { id: indicatorRight; edge: Qt.RightEdge }
 
-    // ── Dot component ─────────────────────────────────────────────────────────
-    Component {
-        id: dotComponent
-        Item {
-            id: dot
-            property real  drift:    0.0
-            property bool  isTap:    false
-            property color dotColor: isTap ? page.tapDotColor : page.pulseColor
-            z:      isTap ? 2 : 1
-            parent: dotContainer
+    // ── Pause icon ────────────────────────────────────────────────────────────
+    Row {
+        id: pauseIcon
+        anchors.verticalCenter:       pulseSmall.bottom
+        anchors.verticalCenterOffset: -Dims.l(1)
+        anchors.horizontalCenter:     pulseSmall.horizontalCenter
+        spacing: Dims.l(4)
+        z: 0
+        opacity: page.beatOffsetLocked ? 0.8 : 0.5
+        Behavior on opacity { NumberAnimation { duration: 200 } }
+        Rectangle {
+            width:  Dims.l(2.5); height: Dims.l(10)
+            radius: Dims.l(1);   color:  page.tapDotColor
+        }
+        Rectangle {
+            width:  Dims.l(2.5); height: Dims.l(10)
+            radius: Dims.l(1);   color:  page.tapDotColor
+        }
+    }
 
-            readonly property real r: page.borderCenter + drift * page.driftExtent
-
-            property real angle: page.entryAngle
-            x: Math.sin(angle * Math.PI / 180) * r
-            y: -Math.cos(angle * Math.PI / 180) * r
-
-            Rectangle {
-                id: dotRect
-                anchors.centerIn: parent
-                width:   dot.isTap ? Dims.l(6) : Dims.l(5)
-                height:  width
-                radius:  width / 2
-                color:   dot.dotColor
-                opacity: 0.7
-            }
-
-            NumberAnimation on angle {
-                from:        page.entryAngle
-                to:          page.exitAngle
-                duration:    page.fullRevMs
-                running:     true
-                paused:      page.beatOffsetLocked
-                easing.type: Easing.Linear
-                onRunningChanged: if (!running) dot.destroy()
-            }
-
-            SequentialAnimation {
-                running: true
-                paused:  page.beatOffsetLocked
-                PauseAnimation  { duration: page.fullRevMs * 0.65 }
-                NumberAnimation {
-                    target:      dotRect
-                    property:    "opacity"
-                    to:          0.0
-                    duration:    page.fullRevMs * 0.20
-                    easing.type: Easing.InQuad
+    // Brake arc — 200°→260°, wave travels clockwise
+    Item {
+        id: brakeIndicator
+        anchors.centerIn: parent
+        width: 0; height: 0
+        z: 0
+        Repeater {
+            model: page.indicatorCount
+            Text {
+                readonly property real arcAngle: 205 + index * 11
+                x: Math.sin(arcAngle * Math.PI / 180) * (page.ringRadius + Dims.l(10)) - width  / 2
+                y: -Math.cos(arcAngle * Math.PI / 180) * (page.ringRadius + Dims.l(10)) - height / 2
+                text:           "›"
+                rotation:       arcAngle
+                color:          page.tapDotColor
+                opacity:        page.chevronOpacity(index, page.indicatorPhase)
+                font {
+                    pixelSize: Dims.l(14)
+                    family:    "Noto Sans Condensed"
+                    weight:    Font.Bold
                 }
             }
         }
     }
 
-    // ── Pause icon — behind pulseSmall and dots, suggests lock zone ───────────
-    Row {
-        id: pauseIcon
-        anchors.verticalCenter:         pulseSmall.bottom
-        anchors.verticalCenterOffset:   -Dims.l(1)
-        anchors.horizontalCenter:       pulseSmall.horizontalCenter
-        spacing: Dims.l(4)
-        z: 0
-        opacity: page.beatOffsetLocked ? 0.8 : 0.5
-        Behavior on opacity { NumberAnimation { duration: 200 } }
-
-        Rectangle {
-            width:  Dims.l(2.5)
-            height: Dims.l(10)
-            radius: Dims.l(1)
-            color:  page.tapDotColor
-        }
-        Rectangle {
-            width:  Dims.l(2.5)
-            height: Dims.l(10)
-            radius: Dims.l(1)
-            color:  page.tapDotColor
-        }
-    }
-
-    // ── Brake chevron — left of ring, clockwise orientation ───────────────────
+    // Push arc — 160°→100°, wave travels counterclockwise
     Item {
-        id: brakeChevron
-        anchors.verticalCenter:         pulseSmall.bottom
-        anchors.verticalCenterOffset:   Dims.l(-1)
-        anchors.horizontalCenter:       pulseSmall.left
-        anchors.horizontalCenterOffset: Dims.l(1)
-        width:  Dims.l(8)
-        height: Dims.l(8)
+        id: pushIndicator
+        anchors.centerIn: parent
+        width: 0; height: 0
         z: 0
-        opacity: 0.5
-
-        property real travel: 0.0
-        transform: Translate {
-            x: Math.cos((-135) * Math.PI / 180) * brakeChevron.travel
-            y: Math.sin((-135) * Math.PI / 180) * brakeChevron.travel
-        }
-
-        SequentialAnimation on travel {
-            loops: Animation.Infinite
-            NumberAnimation { to: Dims.l(4);    duration: 600; easing.type: Easing.InOutSine }
-            NumberAnimation { to: Dims.l(-8);   duration: 1200; easing.type: Easing.InOutSine }
-        }
-
-        // ‹ pointing upper-left — two rects forming chevron, whole item rotated -135°
-        Item {
-            anchors.centerIn: parent
-            rotation: -135
-            Rectangle {
-                width:  Dims.l(1.5); height: Dims.l(4.5)
-                radius: Dims.l(0.5); color:  page.tapDotColor
-                x: Dims.l(1.5); y: 0
-                rotation: -40; transformOrigin: Item.Bottom
-            }
-            Rectangle {
-                width:  Dims.l(1.5); height: Dims.l(4.5)
-                radius: Dims.l(0.5); color:  page.tapDotColor
-                x: Dims.l(1.5); y: Dims.l(3)
-                rotation: 40; transformOrigin: Item.Top
-            }
-        }
-    }
-
-    // ── Push chevron — right of ring, counter-clockwise orientation ───────────
-    Item {
-        id: pushChevron
-        anchors.verticalCenter:         pulseSmall.bottom
-        anchors.verticalCenterOffset:   Dims.l(-6.4)
-        anchors.horizontalCenter:       pulseSmall.right
-        anchors.horizontalCenterOffset: Dims.l(-6.4)
-        width:  Dims.l(8)
-        height: Dims.l(8)
-        z: 0
-        opacity: 0.5
-
-        property real travel: 0.0
-        transform: Translate {
-            x: Math.cos((-45) * Math.PI / 180) * pushChevron.travel
-            y: Math.sin((-45) * Math.PI / 180) * pushChevron.travel
-        }
-
-        SequentialAnimation on travel {
-            loops: Animation.Infinite
-            NumberAnimation { to: Dims.l(4);    duration: 600; easing.type: Easing.InOutSine }
-            NumberAnimation { to: Dims.l(-8);   duration: 1200; easing.type: Easing.InOutSine }
-        }
-
-        // › pointing upper-right — brake mirrored, inner item rotated 45°
-        Item {
-            anchors.centerIn: parent
-            rotation: -45
-            Rectangle {
-                width:  Dims.l(1.5); height: Dims.l(4.5)
-                radius: Dims.l(0.5); color:  page.tapDotColor
-                x: Dims.l(1.5); y: 0
-                rotation: -40; transformOrigin: Item.Bottom
-            }
-            Rectangle {
-                width:  Dims.l(1.5); height: Dims.l(4.5)
-                radius: Dims.l(0.5); color:  page.tapDotColor
-                x: Dims.l(1.5); y: Dims.l(3)
-                rotation: 40; transformOrigin: Item.Top
+        Repeater {
+            model: page.indicatorCount
+            Text {
+                readonly property real arcAngle: 158 - index * 11
+                x: Math.sin(arcAngle * Math.PI / 180) * (page.ringRadius + Dims.l(7)) - width  / 2
+                y: -Math.cos(arcAngle * Math.PI / 180) * (page.ringRadius + Dims.l(7)) - height / 2
+                text:           "›"
+                rotation:       arcAngle + 180
+                color:          page.tapDotColor
+                opacity:        page.chevronOpacity(index, page.indicatorPhase)
+                font {
+                    pixelSize: Dims.l(14)
+                    family:    "Noto Sans Condensed"
+                    weight:    Font.Bold
+                }
             }
         }
     }
@@ -320,50 +254,119 @@ function updateStats(delta, bpm, avgInterval) {
         opacity: 0.0
         z: 0
 
-        SequentialAnimation {
-            id: pulseSmallAnim
-            NumberAnimation { target: pulseSmall; property: "opacity"; to: 0.6; duration: 10;  easing.type: Easing.Linear }
-            NumberAnimation { target: pulseSmall; property: "opacity"; to: 0.0; duration: 170; easing.type: Easing.InQuad }
+        Timer {
+            id: pulseSmallOff
+            repeat: false
+            onTriggered: pulseSmall.opacity = 0.0
         }
 
         Connections {
             target: page.beatSource
             function onBeat() {
                 if (!page.settled) return
-                    pulseSmallAnim.restart()
-                    labelColorFlash.restart()
-                    dotComponent.createObject(dotContainer, {drift: 0.0, isTap: false})
+                    pulseSmall.opacity = 1.0
+                    pulseSmallOff.interval = Math.round(30000 / page.bpmValue)  // half beat
+                    pulseSmallOff.restart()
+                    page.indicatorPhase = (page.indicatorPhase + 1) % page.indicatorCount
+                    page.acquireDot(0.0, false)
             }
         }
     }
 
-    // ── Dot container ─────────────────────────────────────────────────────────
+    // ── Dot container + pool ──────────────────────────────────────────────────
     Item {
         id: dotContainer
         anchors.centerIn: parent
         width:  0
         height: 0
         z: 1
+
+        Repeater {
+            id: dotPool
+            model: page.poolSize
+
+            Item {
+                id: poolDot
+                property bool  active:     false
+                property real  drift:      0.0
+                property bool  isTap:      false
+                property real  dotOpacity: 0.0
+                property color dotColor:   isTap ? page.tapDotColor : page.pulseColor
+                z:       isTap ? 2 : 1
+                visible: active
+
+                readonly property real r: page.borderCenter + drift * page.driftExtent
+                property real angle: page.entryAngle
+
+                x: Math.sin(angle * Math.PI / 180) * r
+                y: -Math.cos(angle * Math.PI / 180) * r
+
+                Rectangle {
+                    anchors.centerIn: parent
+                    width:   poolDot.isTap ? Dims.l(5) : Dims.l(4)
+                    height:  width
+                    radius:  width / 2
+                    color:   poolDot.dotColor
+                    opacity: poolDot.dotOpacity
+                }
+
+                NumberAnimation {
+                    id: angleAnim
+                    target:      poolDot
+                    property:    "angle"
+                    from:        page.entryAngle
+                    to:          page.exitAngle
+                    duration:    page.fullRevMs
+                    running:     poolDot.active
+                    paused:      page.beatOffsetLocked || !page.pageActive
+                    easing.type: Easing.Linear
+                    onStopped:   if (poolDot.active && !page.beatOffsetLocked) poolDot.active = false
+                }
+
+                SequentialAnimation {
+                    id: fadeAnim
+                    running: poolDot.active
+                    paused:      page.beatOffsetLocked || !page.pageActive
+                    PauseAnimation  { duration: page.fullRevMs * 0.65 }
+                    NumberAnimation {
+                        target:      poolDot
+                        property:    "dotOpacity"
+                        to:          0.0
+                        duration:    page.fullRevMs * 0.20
+                        easing.type: Easing.InQuad
+                        onStopped:   poolDot.active = false
+                    }
+                }
+
+                onActiveChanged: {
+                    if (!active) {
+                        dotOpacity = 0.0
+                        angleAnim.stop()
+                        fadeAnim.stop()
+                    }
+                }
+            }
+        }
     }
 
-    // ── Ripple rings on tap ───────────────────────────────────────────────────
+    // ── Ripple rings — spawn at pulseSmall edge, travel outward ───────────────
     Rectangle {
         id: ripple1
         anchors.centerIn: parent
-        width:   Dims.l(70)
+        width:   page.ringRadius * 2
         height:  width
         radius:  width / 2
         color:   "transparent"
         border.color: page.pulseColor
-        border.width: Dims.l(3)
+        border.width: Dims.l(2)
         opacity: 0.0
-        scale:   0.3
+        scale:   1.0
         z: 2
 
         ParallelAnimation {
             id: ripple1Anim
-            NumberAnimation { target: ripple1; property: "scale";   from: 0.4; to: 0.8; duration: 300; easing.type: Easing.OutQuad }
-            NumberAnimation { target: ripple1; property: "opacity"; from: 0.6; to: 0.0; duration: 300; easing.type: Easing.InQuad  }
+            NumberAnimation { target: ripple1; property: "scale";   from: 1.0; to: 1.35; duration: page.rippleDur; easing.type: Easing.OutQuad }
+            NumberAnimation { target: ripple1; property: "opacity"; from: 0.55; to: 0.0; duration: page.rippleDur; easing.type: Easing.InQuad }
         }
 
         Connections {
@@ -375,22 +378,22 @@ function updateStats(delta, bpm, avgInterval) {
     Rectangle {
         id: ripple2
         anchors.centerIn: parent
-        width:   Dims.l(70)
+        width:   page.ringRadius * 2
         height:  width
         radius:  width / 2
         color:   "transparent"
         border.color: page.pulseColor
-        border.width: Dims.l(2)
+        border.width: Dims.l(1.5)
         opacity: 0.0
-        scale:   0.3
+        scale:   1.0
         z: 2
 
         SequentialAnimation {
             id: ripple2Anim
-            PauseAnimation { duration: 80 }
+            PauseAnimation { duration: 60 }
             ParallelAnimation {
-                NumberAnimation { target: ripple2; property: "scale";   from: 0.4; to: 0.7; duration: 250; easing.type: Easing.OutQuad }
-                NumberAnimation { target: ripple2; property: "opacity"; from: 0.5; to: 0.0; duration: 250; easing.type: Easing.InQuad  }
+                NumberAnimation { target: ripple2; property: "scale";   from: 1.0; to: 1.25; duration: page.rippleDur; easing.type: Easing.OutQuad }
+                NumberAnimation { target: ripple2; property: "opacity"; from: 0.40; to: 0.0; duration: page.rippleDur; easing.type: Easing.InQuad }
             }
         }
 
@@ -400,7 +403,7 @@ function updateStats(delta, bpm, avgInterval) {
         }
     }
 
-    // ── Tap hint — visible before first tap, pulses with beat ─────────────────
+    // ── Tap hint ──────────────────────────────────────────────────────────────
     Label {
         id: tapHint
         anchors.top:              pulseSmall.top
@@ -411,10 +414,7 @@ function updateStats(delta, bpm, avgInterval) {
         text:    qsTrId("id-tap")
         visible: !page.sessionActive
         opacity: 0.4
-        font {
-            pixelSize: Dims.l(9)
-            weight:    Font.Bold
-        }
+        font { pixelSize: Dims.l(9); weight: Font.Bold }
 
         SequentialAnimation {
             id: tapHintPulse
@@ -425,12 +425,12 @@ function updateStats(delta, bpm, avgInterval) {
         Connections {
             target: page.beatSource
             function onBeat() {
-                if (page.settled && page.lastTap === 0) tapHintPulse.restart()
+                if (page.settled && !page.sessionActive) tapHintPulse.restart()
             }
         }
     }
 
-    // ── Stats cycler — replaces tap hint after first tap ──────────────────────
+    // ── Stats cycler ──────────────────────────────────────────────────────────
     Label {
         id: statsCycler
         anchors.top:              pulseSmall.top
@@ -438,15 +438,12 @@ function updateStats(delta, bpm, avgInterval) {
         anchors.topMargin:        Dims.h(9)
         z: 3
         visible: page.sessionActive
-        text: page.statusOrStats()
+        text:    page.statusOrStats()
         opacity: 0.8
-        font {
-            pixelSize: Dims.l(8)
-            family:    "Noto Sans Condensed"
-        }
+        font { pixelSize: Dims.l(8); family: "Noto Sans Condensed" }
     }
 
-    // ── BPM label — tap target only ───────────────────────────────────────────
+    // ── BPM label — tap target ────────────────────────────────────────────────
     Label {
         id: bpmLabel
         anchors.centerIn: parent
@@ -458,19 +455,12 @@ function updateStats(delta, bpm, avgInterval) {
             weight:    Font.Bold
         }
         color:   "#ffffff"
-        opacity: 0.9
         scale:   1.0
 
         SequentialAnimation {
             id: labelPump
-            NumberAnimation { target: bpmLabel; property: "scale"; to: 1.4; duration: 45;  easing.type: Easing.InQuad  }
-            NumberAnimation { target: bpmLabel; property: "scale"; to: 1.0; duration: 90;  easing.type: Easing.OutQuad }
-        }
-
-        SequentialAnimation {
-            id: labelColorFlash
-            ColorAnimation { target: bpmLabel; property: "color"; to: page.pulseColor; duration: 10;  easing.type: Easing.Linear }
-            ColorAnimation { target: bpmLabel; property: "color"; to: "#ffffff";       duration: 340; easing.type: Easing.InQuad }
+            NumberAnimation { target: bpmLabel; property: "scale"; to: 1.3; duration: 30;  easing.type: Easing.InQuad  }
+            NumberAnimation { target: bpmLabel; property: "scale"; to: 1.0; duration: 60;  easing.type: Easing.OutQuad }
         }
 
         Connections {
@@ -485,27 +475,25 @@ function updateStats(delta, bpm, avgInterval) {
                 var now = new Date().getTime()
 
                 if (page.lastTap > 0 && (now - page.lastTap) > page.sessionBreakMs) {
-                    page.intervals          = []
-                    page.lastTap            = 0
-                    page.statSpreadMin      = 0
-                    page.statSpreadMax      = 0
+                    page.intervals           = []
+                    page.lastTap             = 0
+                    page.statSpreadMin       = 0
+                    page.statSpreadMax       = 0
+                    page.statConfidence      = 0
                     page.consecutiveOutliers = 0
                 }
 
                 page.tapCount++
                 page.sessionActive = true
-                page.statConfidence      = 0
-                page.consecutiveOutliers = 0
 
                 if (page.lastTap === 0) {
                     page.statConfidence = 1
-                    dotComponent.createObject(dotContainer, {drift: 0.0, isTap: true})
+                    page.acquireDot(0.0, true)
                 }
 
                 if (page.lastTap > 0) {
                     var delta = now - page.lastTap
 
-                    // ── Outlier detection ──────────────────────────────────────
                     var isOutlier = false
                     if (page.intervals.length >= 2) {
                         var sum = 0
@@ -515,7 +503,6 @@ function updateStats(delta, bpm, avgInterval) {
                     }
 
                     if (isOutlier) {
-                        // Check for half-time or double-time — immediate reset
                         var isHarmonic = page.intervals.length >= 2 &&
                         (Math.abs(delta - mean * 2.0) < mean * 0.30 ||
                         Math.abs(delta - mean * 0.5) < mean * 0.15)
@@ -537,12 +524,11 @@ function updateStats(delta, bpm, avgInterval) {
                         var expected = 60000.0 / page.bpmValue
                         var drift    = Math.max(-1.0, Math.min(1.0,
                                                                (delta - expected) / (expected * 0.75)))
-                        dotComponent.createObject(dotContainer, {drift: drift, isTap: true})
+                        page.acquireDot(drift, true)
                         page.lastTap = now
                         return
                     }
 
-                    // ── Clean interval — accepted ──────────────────────────────
                     page.consecutiveOutliers = 0
                     page.intervals.push(delta)
                     if (page.intervals.length > 8) page.intervals.shift()
@@ -556,7 +542,7 @@ function updateStats(delta, bpm, avgInterval) {
                             var expected2 = 60000.0 / bpm
                             var drift2    = Math.max(-1.0, Math.min(1.0,
                                                                     (delta - expected2) / (expected2 * 0.75)))
-                            dotComponent.createObject(dotContainer, {drift: drift2, isTap: true})
+                            page.acquireDot(drift2, true)
                 }
 
                 page.lastTap = now
@@ -585,14 +571,11 @@ function updateStats(delta, bpm, avgInterval) {
                                                 else if (bpm < 200) return "Presto"
                                                     else                return "Prestissimo"
         }
-        font {
-            pixelSize: Dims.l(8)
-            family:    "Noto Sans Condensed"
-        }
+        font { pixelSize: Dims.l(8); family: "Noto Sans Condensed" }
         opacity: 0.8
     }
 
-    // ── Turntable zones — below BPM label, 40/20/40 horizontal split ──────────
+    // ── Turntable zones ───────────────────────────────────────────────────────
     MouseArea {
         id: brakeZone
         anchors.left:   parent.left
@@ -605,16 +588,14 @@ function updateStats(delta, bpm, avgInterval) {
             page.turntableState = "braking"
             page.beatOffsetDelta(5)
             turntableStateReset.restart()
-            brakeChevron.opacity = 0.8
-            brakeChevronReset.restart()
         }
     }
 
     MouseArea {
         id: lockZone
-        anchors.left:         brakeZone.right
-        anchors.top:          tempoNameLabel.bottom
-        anchors.bottom:       parent.bottom
+        anchors.left:   brakeZone.right
+        anchors.top:    tempoNameLabel.bottom
+        anchors.bottom: parent.bottom
         width: parent.width * 0.20
         z: 4
         onClicked: {
@@ -635,8 +616,6 @@ function updateStats(delta, bpm, avgInterval) {
             page.turntableState = "pushing"
             page.beatOffsetDelta(-5)
             turntableStateReset.restart()
-            pushChevron.opacity = 0.9
-            pushChevronReset.restart()
         }
     }
 }
