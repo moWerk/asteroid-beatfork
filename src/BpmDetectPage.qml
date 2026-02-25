@@ -25,6 +25,7 @@ Item {
     property int    rippleDur:      Math.min(300, Math.round(30000 / bpmValue))
     property var    beatSource
     property int    statsCycleTap:  0
+    property real lastPressTime: 0
     onStatsCycleTapChanged: {
         if (lastTap > 0) statsIndex = (statsIndex + 1) % statCount
     }
@@ -265,10 +266,14 @@ Item {
             function onBeat() {
                 if (!page.settled) return
                     pulseSmall.opacity = 1.0
-                    pulseSmallOff.interval = Math.round(30000 / page.bpmValue)  // half beat
+                    pulseSmallOff.interval = Math.round(30000 / page.bpmValue)
                     pulseSmallOff.restart()
                     page.indicatorPhase = (page.indicatorPhase + 1) % page.indicatorCount
-                    page.acquireDot(0.0, false)
+
+                    var guard = Math.round(9000 / page.bpmValue)
+                    var now   = new Date().getTime()
+                    if (page.lastTap === 0 || (now - page.lastTap) > guard)
+                        page.acquireDot(0.0, false)
             }
         }
     }
@@ -471,6 +476,17 @@ Item {
         MouseArea {
             anchors.fill: parent
             z: 4
+
+            onPressed: {
+                page.lastPressTime = new Date().getTime()
+                pulseSmall.opacity = 1.0
+            }
+
+            onReleased: {
+                pulseSmallOff.interval = Math.round(30000 / page.bpmValue)
+                pulseSmallOff.restart()
+            }
+
             onClicked: {
                 var now = new Date().getTime()
 
