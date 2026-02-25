@@ -101,6 +101,11 @@ Application {
     ]
 
     QtObject {
+        id: page0State
+        property bool sessionActive: false
+    }
+
+    QtObject {
         id: page1State
         property bool soundActive:  false
         property bool hapticActive: false
@@ -230,6 +235,7 @@ Application {
                     app.beatOffsetLocked = !app.beatOffsetLocked
                     if (!app.beatOffsetLocked) app.beatFlash()  // instant dot on release
                 }
+                onSessionActiveChanged: page0State.sessionActive = sessionActive
             }
 
             // Stats cycler overlay — sits above PageHeader for page 0
@@ -286,7 +292,8 @@ Application {
 
     PageHeader {
         text: app.pageTitles[pageView.currentIndex]
-        opacity: (pageView.currentIndex === 1 && page1State.pulseVisible) ? 0.0 : 1.0
+        opacity: (pageView.currentIndex === 1 && page1State.pulseVisible) ||
+        (pageView.currentIndex === 0 && page0State.sessionActive) ? 0.0 : 1.0
         Behavior on opacity { NumberAnimation { duration: 300; easing.type: Easing.InOutQuad } }
     }
 
