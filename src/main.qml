@@ -40,7 +40,7 @@ Application {
     ConfigurationValue { id: freqConfig;  key: "/asteroid/apps/beatfork/freq";       defaultValue: 440 }
     ConfigurationValue { id: colorConfig; key: "/asteroid/apps/beatfork/colorIndex"; defaultValue: 0   }
 
-    readonly property var pageCenterColors: ["#119DA4", "#07454B", "#0E8890"]
+    readonly property var pageCenterColors: ["#1C325F", "#13213F", "#1A3360"]
     readonly property var pageOuterColors:  ["#090B0C", "#050708", "#070909"]
     readonly property int bpmMin:           40
     readonly property int bpmMax:           208
@@ -77,7 +77,16 @@ Application {
     ]
 
     readonly property var pulseColors: [
-        "#FF69B4", "#0ABAFF", "#C5FCE4", "#FF6700", "#A1DB43", "#FF4B0A", "#FFEC1F", "#D75BBE", "#CCFF66"
+        "#FF6B00",  // 1 orange
+        "#00BBFF",  // 2 sky blue
+        "#FFE500",  // 3 yellow
+        "#CC44FF",  // 4 purple
+        "#FF4466",  // 5 coral red
+        "#00E5AA",  // 6 mint green
+        "#FF69B4",  // 7 hot pink
+        "#AAFF33",  // 8 lime
+        "#FF3300",  // 9 red-orange
+        "#00CED1"   // 10 teal cyan  — pairs with red-orange and wraps to orange
     ]
 
     readonly property string pulseColor: pulseColors[colorConfig.value]
@@ -203,7 +212,14 @@ Application {
                 sessionBreakMs: app.sessionBreakMs
                 pulseColor:     app.pulseColor
                 beatSource:     app
-                onBpmValueSet:  bpmConfig.value = bpm
+                onBpmValueSet: {
+                    bpmConfig.value = bpm
+                    var interval  = Math.max(1, Math.round(60000 / bpmConfig.value) + app.beatOffset)
+                    var elapsed   = new Date().getTime() - page0.lastPressTime
+                    var remaining = Math.max(1, interval - (elapsed % interval))
+                    beatTimer.interval = remaining
+                    beatTimer.restart()
+                }
                 tapDotColor:    app.pulseColors[(colorConfig.value + 1) % app.pulseColors.length]
                 beatOffset:       app.beatOffset
                 beatOffsetLocked: app.beatOffsetLocked
