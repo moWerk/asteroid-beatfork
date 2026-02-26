@@ -292,12 +292,11 @@ Application {
 
     PageHeader {
         text: app.pageTitles[pageView.currentIndex]
+        enabled: !(pageView.currentIndex === 0 && page0State.sessionActive)
         opacity: (pageView.currentIndex === 1 && page1State.pulseVisible) ||
         (pageView.currentIndex === 0 && page0State.sessionActive) ? 0.0 : 1.0
         Behavior on opacity { NumberAnimation { duration: 300; easing.type: Easing.InOutQuad } }
     }
-
-
 
     PageDot {
         anchors.horizontalCenter: parent.horizontalCenter
@@ -306,16 +305,5 @@ Application {
         height:       Dims.h(3)
         dotNumber:    DeviceSpecs.hasSpeaker ? 3 : 2
         currentIndex: pageView.currentIndex
-    }
-
-    // Stats cycler tap zone — overlays PageHeader on page 0
-    MouseArea {
-        anchors.left:   parent.left
-        anchors.right:  parent.right
-        anchors.top:    parent.top
-        height:         Dims.h(20)
-        z: 100
-        enabled: pageView.currentIndex === 0 && page0.sessionActive
-        onClicked: page0.statsCycleTap++
     }
 }
