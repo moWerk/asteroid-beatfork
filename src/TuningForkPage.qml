@@ -8,7 +8,8 @@
  */
 
 import QtQuick
-import QtMultimedia
+import Nemo.Ngf
+
 import org.asteroid.controls
 import org.asteroid.utils
 
@@ -19,6 +20,13 @@ Item {
     property int    freqValue:  440
     property var    freqModel:  []
     property var    freqNames:  []
+
+    // ngf has no 'playing' property — tracked locally, single writer via
+    // toneStart()/toneStop()
+    property bool   tonePlaying: false
+
+    function toneStart() { tone.play(); tonePlaying = true }
+    function toneStop()  { tone.stop(); tonePlaying = false }
     property string pulseColor: "#00ff00"
     property bool   loopActive: false
 
@@ -36,16 +44,21 @@ Item {
     Indicator { id: indicatorLeft; edge: Qt.LeftEdge }
 
     // ── Audio ─────────────────────────────────────────────────────────────────
-    SoundEffect {
+    // Tones play via ngfd (events beatfork-tone-<hz>, sound.repeat=true,
+    // shipped in events.d/). QtMultimedia SoundEffect on Qt6 chops playback
+    // and holds the PulseAudio sink open permanently (battery drain), see
+    // the asteroid-launcher ngf migration. The event name follows the
+    // selected frequency automatically.
+    NonGraphicalFeedback {
         id: tone
-        volume: 1.0
+        event: "beatfork-tone-" + page.freqValue
     }
 
     Timer {
         id: singlePlayStop
         interval: 1000
         repeat:   false
-        onTriggered: tone.stop()
+        onTriggered: page.toneStop()
     }
 
     // ── Upper half ────────────────────────────────────────────────────────────
@@ -101,12 +114,11 @@ Item {
             anchors.fill: parent
             onClicked: {
                 singlePlayStop.stop()
-                tone.stop()
+                page.toneStop()
                 page.loopActiveSet(false)
                 var idx = page.freqModel.indexOf(page.freqValue)
                 var nextFreq = page.freqModel[(idx + 1) % page.freqModel.length]
                 page.freqValueSet(nextFreq)
-                tone.source = "file:///usr/share/sounds/" + nextFreq + "hz.wav"
             }
         }
     }
@@ -131,7 +143,7 @@ Item {
                 id: rippleTimer
                 interval: 1200
                 repeat:   true
-                running:  tone.playing
+                running:  page.tonePlaying
                 onTriggered: forkButton.rippleCount++
             }
 
@@ -157,7 +169,7 @@ Item {
                 Connections {
                     target: forkButton
                     function onRippleCountChanged() {
-                        if (tone.playing) forkRipple1Anim.restart()
+                        if (page.tonePlaying) forkRipple1Anim.restart()
                     }
                 }
             }
@@ -187,7 +199,7 @@ Item {
                 Connections {
                     target: forkButton
                     function onRippleCountChanged() {
-                        if (tone.playing) forkRipple2Anim.restart()
+                        if (page.tonePlaying) forkRipple2Anim.restart()
                     }
                 }
             }
@@ -196,7 +208,7 @@ Item {
                 id: forkBg
                 anchors.fill: parent
                 radius:  width / 2
-                color:   tone.playing ? page.pulseColor : "#000000"
+                color:   page.tonePlaying ? page.pulseColor : "#000000"
                 opacity: 0.7
                 z: 1
 
@@ -204,7 +216,7 @@ Item {
 
                 SequentialAnimation {
                     id: idleBreath
-                    running:  !tone.playing
+                    running:  !page.tonePlaying
                     loops:    Animation.Infinite
                     NumberAnimation { target: forkBg; property: "opacity"; to: 0.35; duration: 900; easing.type: Easing.InOutSine }
                     NumberAnimation { target: forkBg; property: "opacity"; to: 0.7;  duration: 900; easing.type: Easing.InOutSine }
@@ -236,13 +248,14 @@ Item {
                         holdActive = false
                         return
                     }
-                    if (tone.playing) {
+                    if (page.tonePlaying) {
                         singlePlayStop.stop()
-                        tone.stop()
+                        page.toneStop()
                         page.loopActiveSet(false)
                     } else {
-                        tone.loops = 1
-                        tone.play()
+                        // single play: the event loops (sound.repeat), the
+                        // 1s timer bounds it to one audible strike
+                        page.toneStart()
                         playingPulse.restart()
                         singlePlayStop.restart()
                         forkButton.rippleCount++
@@ -252,8 +265,7 @@ Item {
                 onPressAndHold: {
                     holdActive = true
                     singlePlayStop.stop()
-                    tone.loops = SoundEffect.Infinite
-                    if (!tone.playing) tone.play()
+                    if (!page.tonePlaying) page.toneStart()
                         page.loopActiveSet(true)
                         playingPulse.restart()
                         forkButton.rippleCount++
@@ -270,7 +282,7 @@ Item {
             anchors.horizontalCenter: forkButton.horizontalCenter
             anchors.topMargin:        Dims.h(1)
             //% "Tap to stop"
-            text:           tone.playing ? qsTrId("id-tap-to-stop") : qsTrId("id-hold-to-loop")
+            text:           page.tonePlaying ? qsTrId("id-tap-to-stop") : qsTrId("id-hold-to-loop")
             font.pixelSize: Dims.l(6)
             opacity: 0.6
         }

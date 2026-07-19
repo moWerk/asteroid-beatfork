@@ -18,7 +18,6 @@
  */
 
 import QtQuick
-import QtMultimedia
 import Nemo.Configuration
 import Nemo.Ngf
 import Nemo.KeepAlive
@@ -127,10 +126,13 @@ Application {
         page2State.loopActive
     }
 
-    SoundEffect {
+    // Tick plays via ngfd (event beatfork-tick, shipped in events.d/) —
+    // QtMultimedia SoundEffect on Qt6 chops playback and holds the
+    // PulseAudio sink open permanently (battery drain), see the
+    // asteroid-launcher ngf migration.
+    NonGraphicalFeedback {
         id: tickSound
-        source: "file:///usr/share/sounds/tick.wav"
-        volume: 1.0
+        event: "beatfork-tick"
     }
 
     NonGraphicalFeedback {
