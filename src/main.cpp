@@ -16,8 +16,13 @@
  */
 
 #include <asteroidapp.h>
+#include <QtQml>
+#include "ToneGenerator.h"
 
 int main(int argc, char *argv[])
 {
+    qmlRegisterSingletonType<ToneGenerator>(
+        "moWerk.ToneGenerator", 1, 0, "ToneGen",
+        ToneGenerator::qmlInstance);
     return AsteroidApp::main(argc, argv);
 }
