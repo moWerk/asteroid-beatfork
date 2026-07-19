@@ -8,7 +8,7 @@
  */
 
 import QtQuick
-import Nemo.Ngf
+import moWerk.ToneGenerator
 
 import org.asteroid.controls
 import org.asteroid.utils
@@ -21,12 +21,12 @@ Item {
     property var    freqModel:  []
     property var    freqNames:  []
 
-    // ngf has no 'playing' property — tracked locally, single writer via
-    // toneStart()/toneStop()
-    property bool   tonePlaying: false
+    // live-synthesized tone (ToneGen singleton) — playing state comes
+    // from the generator itself
+    property bool   tonePlaying: ToneGen.playing
 
-    function toneStart() { tone.play(); tonePlaying = true }
-    function toneStop()  { tone.stop(); tonePlaying = false }
+    function toneStart() { ToneGen.start(freqValue) }
+    function toneStop()  { ToneGen.stop() }
     property string pulseColor: "#00ff00"
     property bool   loopActive: false
 
@@ -44,15 +44,10 @@ Item {
     Indicator { id: indicatorLeft; edge: Qt.LeftEdge }
 
     // ── Audio ─────────────────────────────────────────────────────────────────
-    // Tones play via ngfd (events beatfork-tone-<hz>, sound.repeat=true,
-    // shipped in events.d/). QtMultimedia SoundEffect on Qt6 chops playback
-    // and holds the PulseAudio sink open permanently (battery drain), see
-    // the asteroid-launcher ngf migration. The event name follows the
-    // selected frequency automatically.
-    NonGraphicalFeedback {
-        id: tone
-        event: "beatfork-tone-" + page.freqValue
-    }
+    // Tones are synthesized live (QAudioSink sine with raised-cosine
+    // attack/release in C++) — no sound files, any frequency, and the
+    // envelope makes start/stop pop-free by construction. ngfd stays for
+    // the metronome tick only; it is a feedback tool, not an instrument.
 
     Timer {
         id: singlePlayStop
@@ -288,7 +283,4 @@ Item {
         }
     }
 
-    Component.onCompleted: {
-        tone.source = "file:///usr/share/sounds/" + page.freqValue + "hz.wav"
-    }
 }
