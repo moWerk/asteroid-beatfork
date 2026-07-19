@@ -7,10 +7,10 @@
  * License, or (at your option) any later version.
  */
 
-import QtQuick 2.9
-import QtMultimedia 5.8
-import org.asteroid.controls 1.0
-import org.asteroid.utils 1.0
+import QtQuick
+import QtMultimedia
+import org.asteroid.controls
+import org.asteroid.utils
 
 Item {
     id: page
