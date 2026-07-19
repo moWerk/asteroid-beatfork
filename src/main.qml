@@ -117,13 +117,11 @@ Application {
         property bool loopActive: false
     }
 
-    Binding {
-        target:   DisplayBlanking
-        property: "preventBlanking"
-        value:    page1State.soundActive  ||
-        page1State.hapticActive ||
-        page1State.pulseVisible ||
-        page2State.loopActive
+    DisplayBlanking {
+        preventBlanking: page1State.soundActive  ||
+                         page1State.hapticActive ||
+                         page1State.pulseVisible ||
+                         page2State.loopActive
     }
 
     // Tick plays via ngfd (event beatfork-tick, shipped in events.d/) —
