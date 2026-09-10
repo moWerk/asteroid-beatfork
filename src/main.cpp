@@ -21,6 +21,8 @@
 
 int main(int argc, char *argv[])
 {
+    if (!qEnvironmentVariableIsSet("PULSE_LATENCY_MSEC"))
+        qputenv("PULSE_LATENCY_MSEC", QByteArray::number(ToneGenerator::kPulseLatencyMs));
     qmlRegisterSingletonType<ToneGenerator>(
         "moWerk.ToneGenerator", 1, 0, "ToneGen",
         ToneGenerator::qmlInstance);

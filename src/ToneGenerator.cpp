@@ -43,10 +43,10 @@ void SineDevice::beginRelease()
 
 qint64 SineDevice::bytesAvailable() const
 {
-    // report one modest chunk (20 ms) so the pull-mode sink paces its
-    // reads instead of stuffing the PulseAudio queue ("Failed to push
-    // data into queue" spam + seconds of over-buffered latency)
-    return (m_sampleRate / 50) * qint64(sizeof(qint16))
+    // A generator never runs dry. Report ~1 s so each refill can top up
+    // the sink's whole ring buffer. Latency is controlled by
+    // QAudioSink::setBufferSize(), not here.
+    return m_sampleRate * qint64(sizeof(qint16))
            + QIODevice::bytesAvailable();
 }
 
@@ -87,6 +87,8 @@ qint64 SineDevice::readData(char *data, qint64 maxlen)
 ToneGenerator::ToneGenerator(QObject *parent)
     : QObject(parent)
 {
+    m_drainTimer.setSingleShot(true);
+    connect(&m_drainTimer, &QTimer::timeout, this, &ToneGenerator::drainAndClose);
 }
 
 ToneGenerator::~ToneGenerator()
@@ -96,6 +98,7 @@ ToneGenerator::~ToneGenerator()
 
 void ToneGenerator::start(double frequency)
 {
+    m_drainTimer.stop();
     // restart cleanly on frequency change or re-trigger
     if (m_sink) {
         m_sink->stop();
@@ -109,12 +112,10 @@ void ToneGenerator::start(double frequency)
 
     m_device.configure(kSampleRate, frequency);
     if (!m_device.isOpen())
-        m_device.open(QIODevice::ReadOnly);
+        m_device.open(QIODevice::ReadOnly | QIODevice::Unbuffered);
 
     m_sink.reset(new QAudioSink(QMediaDevices::defaultAudioOutput(), format));
-    // bound end-to-end latency to ~100 ms: keeps stop responsive and
-    // the pulse queue shallow
-    m_sink->setBufferSize(kSampleRate / 10 * int(sizeof(qint16)));
+    m_sink->setBufferSize(kSampleRate / 4 * int(sizeof(qint16))); // 250ms
     m_sink->start(&m_device);
     setPlaying(true);
 }
@@ -126,10 +127,13 @@ void ToneGenerator::stop()
         return;
     }
     // let the release envelope (10 ms) plus the bounded sink buffer
-    // (~100 ms) play out before closing, so the tail is not truncated;
+    // (kPulseLatencyMs) play out before closing, so the tail is not truncated;
     // then release the sink so it can suspend (no held stream)
     m_device.beginRelease();
-    QTimer::singleShot(150, this, &ToneGenerator::drainAndClose);
+    const int bytesPerMs = kSampleRate * int(sizeof(qint16)) / 1000;
+    const int ringMs  = int(m_sink->bufferSize() / bytesPerMs);
+    const int marginMs = 100;
+    m_drainTimer.start(ringMs + kPulseLatencyMs + 10 + marginMs);
     setPlaying(false);
 }
 
