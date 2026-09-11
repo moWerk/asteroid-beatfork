@@ -14,6 +14,7 @@
 #include <QIODevice>
 #include <QAudioSink>
 #include <QScopedPointer>
+#include <QTimer>
 
 // Live sine synthesis for the tuning fork: exact frequency from math,
 // no sound file assets. A raised-cosine attack/release envelope makes
@@ -59,6 +60,7 @@ public:
     bool playing() const { return m_playing; }
 
     static ToneGenerator *qmlInstance(class QQmlEngine *, class QJSEngine *);
+    static constexpr int kPulseLatencyMs = 100;
 
 signals:
     void playingChanged();
@@ -70,6 +72,7 @@ private:
     void setPlaying(bool p);
 
     QScopedPointer<QAudioSink> m_sink;
+    QTimer m_drainTimer;
     SineDevice m_device;
     bool m_playing = false;
 };
