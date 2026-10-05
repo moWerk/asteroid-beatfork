@@ -590,7 +590,8 @@ Item {
                                                 else if (bpm < 200) return "Presto"
                                                     else                return "Prestissimo"
         }
-        font { pixelSize: Dims.l(8); family: "Noto Sans Condensed" }
+        // SailfishOS: 20 % smaller than on the watch (mo, 2026-10-05)
+        font { pixelSize: Dims.l(8 * 0.8); family: "Noto Sans Condensed" }
         opacity: 0.8
     }
 

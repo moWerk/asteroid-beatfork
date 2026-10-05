@@ -17,6 +17,7 @@
 #include <QDebug>
 #include <QtQml>
 #include <cmath>
+#include <cstring>
 
 static const int kSampleRate = 48000;
 static const double kAmplitude = 0.6;
@@ -138,6 +139,18 @@ void ToneGenerator::start(double frequency)
     }
 }
 
+qint64 TickDevice::readData(char *data, qint64 maxlen)
+{
+    qint64 n = 0;
+    if (m_pos >= 0 && m_pos < m_pcm.size()) {
+        n = qMin<qint64>(maxlen, m_pcm.size() - m_pos);
+        memcpy(data, m_pcm.constData() + m_pos, size_t(n));
+        m_pos += int(n);
+    }
+    if (n < maxlen) memset(data + n, 0, size_t(maxlen - n));   // silence between ticks
+    return maxlen;
+}
+
 void ToneGenerator::tick()
 {
     if (m_tickPcm.isEmpty()) {
@@ -153,29 +166,36 @@ void ToneGenerator::tick()
         if (wav.size() >= 28)
             m_tickRate = qFromLittleEndian<quint32>(reinterpret_cast<const uchar *>(wav.constData() + 24));
         m_tickPcm = wav.mid(data + 8);
+        m_tickDevice.setPcm(m_tickPcm);
+        m_tickIdle.setSingleShot(true);
+        connect(&m_tickIdle, &QTimer::timeout, this, [this]() {
+            // no tick for a while: close the stream so the sink can suspend
+            if (m_tickSink) { m_tickSink->stop(); m_tickSink.reset(); }
+            if (m_tickDevice.isOpen()) m_tickDevice.close();
+        });
     }
-    if (m_tickSink) {
-        m_tickSink->stop();
-        m_tickSink.reset();
+    if (!m_tickSink) {
+        QAudioFormat format;
+        format.setSampleRate(m_tickRate);
+        format.setChannelCount(1);
+        format.setSampleSize(16);
+        format.setSampleType(QAudioFormat::SignedInt);
+        format.setByteOrder(QAudioFormat::LittleEndian);
+        format.setCodec(QStringLiteral("audio/pcm"));
+        if (!m_tickDevice.isOpen())
+            m_tickDevice.open(QIODevice::ReadOnly | QIODevice::Unbuffered);
+        m_tickSink.reset(new QAudioOutput(QAudioDeviceInfo::defaultOutputDevice(), format));
+        m_tickSink->setBufferSize(m_tickRate / 20 * int(sizeof(qint16)));   // 50 ms
+        m_tickSink->start(&m_tickDevice);
     }
-    if (m_tickBuffer.isOpen()) m_tickBuffer.close();
-    m_tickBuffer.setData(m_tickPcm);
-    m_tickBuffer.open(QIODevice::ReadOnly);
-
-    QAudioFormat format;
-    format.setSampleRate(m_tickRate);
-    format.setChannelCount(1);
-    format.setSampleSize(16);
-    format.setSampleType(QAudioFormat::SignedInt);
-    format.setByteOrder(QAudioFormat::LittleEndian);
-    format.setCodec(QStringLiteral("audio/pcm"));
-    m_tickSink.reset(new QAudioOutput(QAudioDeviceInfo::defaultOutputDevice(), format));
-    m_tickSink->start(&m_tickBuffer);
+    m_tickDevice.trigger();
+    m_tickIdle.start(3000);   // longer than the slowest beat (40 BPM = 1.5 s)
     if (qEnvironmentVariableIsSet("SFOS_SELFTEST_AUDIO")) {
         QAudioOutput *sink = m_tickSink.data();
         QTimer::singleShot(30, this, [this, sink]() {
             if (m_tickSink.data() == sink)
-                qDebug() << "selftest tick: state" << sink->state() << "error" << sink->error();
+                qDebug() << "selftest tick: state" << sink->state() << "error" << sink->error()
+                         << "processed us" << sink->processedUSecs();
         });
     }
 }

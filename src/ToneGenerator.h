@@ -15,7 +15,6 @@
 #include <QAudioOutput>
 #include <QScopedPointer>
 #include <QTimer>
-#include <QBuffer>
 #include <QByteArray>
 
 // Live sine synthesis for the tuning fork: exact frequency from math,
@@ -48,6 +47,25 @@ private:
     PhaseState m_phaseState = Attack;
 };
 
+// SailfishOS: the metronome tick. One stream stays open while ticks come
+// in and plays silence between them; trigger() starts the tick samples at
+// the next read. A new short stream per tick did not play reliably.
+class TickDevice : public QIODevice
+{
+    Q_OBJECT
+public:
+    explicit TickDevice(QObject *parent = nullptr) : QIODevice(parent) {}
+    void setPcm(const QByteArray &pcm) { m_pcm = pcm; }
+    void trigger() { m_pos = 0; }
+    qint64 readData(char *data, qint64 maxlen) override;
+    qint64 writeData(const char *, qint64) override { return 0; }
+    qint64 bytesAvailable() const override { return 4096 + QIODevice::bytesAvailable(); }
+    bool isSequential() const override { return true; }
+private:
+    QByteArray m_pcm;
+    int m_pos = -1;
+};
+
 class ToneGenerator : public QObject
 {
     Q_OBJECT
@@ -78,7 +96,8 @@ private:
 
     QScopedPointer<QAudioOutput> m_sink;   // SailfishOS: Qt 5.6 has QAudioOutput, not QAudioSink
     QScopedPointer<QAudioOutput> m_tickSink;
-    QBuffer m_tickBuffer;
+    TickDevice m_tickDevice;
+    QTimer m_tickIdle;
     QByteArray m_tickPcm;
     int m_tickRate = 44100;
     QTimer m_drainTimer;

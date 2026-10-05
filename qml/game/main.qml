@@ -172,6 +172,14 @@ Item {
         interval: 1000
         onTriggered: { ToneGen.stop(); console.log("selftest tone stopped") }
     }
+    // Test hook: four more ticks at 120 BPM, to see repeated ticks play
+    Timer {
+        interval: 500
+        repeat: true
+        property int n: 0
+        running: typeof selftestAudio !== "undefined" && selftestAudio && n < 4
+        onTriggered: { n++; tickSound.play() }
+    }
 
     Timer {
         id: beatTimer
