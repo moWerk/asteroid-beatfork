@@ -11,6 +11,8 @@
 
 #include <QAudioFormat>
 #include <QAudioDeviceInfo>
+#include <QFile>
+#include <QtEndian>
 #include <QTimer>
 #include <QDebug>
 #include <QtQml>
@@ -132,6 +134,48 @@ void ToneGenerator::start(double frequency)
             if (m_sink.data() == sink)
                 qDebug() << "selftest tone: state" << sink->state() << "error" << sink->error()
                          << "processed us" << sink->processedUSecs();
+        });
+    }
+}
+
+void ToneGenerator::tick()
+{
+    if (m_tickPcm.isEmpty()) {
+        // tick.wav: 16 bit mono PCM; skip the RIFF header up to "data"
+        QFile f(QStringLiteral("/usr/share/harbour-asteroid-beatfork/qml/game/tick.wav"));
+        if (!f.open(QIODevice::ReadOnly)) {
+            qWarning() << "tick: cannot open" << f.fileName();
+            return;
+        }
+        const QByteArray wav = f.readAll();
+        const int data = wav.indexOf("data");
+        if (data < 0 || data + 8 > wav.size()) return;
+        if (wav.size() >= 28)
+            m_tickRate = qFromLittleEndian<quint32>(reinterpret_cast<const uchar *>(wav.constData() + 24));
+        m_tickPcm = wav.mid(data + 8);
+    }
+    if (m_tickSink) {
+        m_tickSink->stop();
+        m_tickSink.reset();
+    }
+    if (m_tickBuffer.isOpen()) m_tickBuffer.close();
+    m_tickBuffer.setData(m_tickPcm);
+    m_tickBuffer.open(QIODevice::ReadOnly);
+
+    QAudioFormat format;
+    format.setSampleRate(m_tickRate);
+    format.setChannelCount(1);
+    format.setSampleSize(16);
+    format.setSampleType(QAudioFormat::SignedInt);
+    format.setByteOrder(QAudioFormat::LittleEndian);
+    format.setCodec(QStringLiteral("audio/pcm"));
+    m_tickSink.reset(new QAudioOutput(QAudioDeviceInfo::defaultOutputDevice(), format));
+    m_tickSink->start(&m_tickBuffer);
+    if (qEnvironmentVariableIsSet("SFOS_SELFTEST_AUDIO")) {
+        QAudioOutput *sink = m_tickSink.data();
+        QTimer::singleShot(30, this, [this, sink]() {
+            if (m_tickSink.data() == sink)
+                qDebug() << "selftest tick: state" << sink->state() << "error" << sink->error();
         });
     }
 }

@@ -140,13 +140,14 @@ Item {
     // QtMultimedia SoundEffect on Qt6 chops playback and holds the
     // PulseAudio sink open permanently (battery drain), see the
     // asteroid-launcher ngf migration.
-    // SailfishOS: the tick is a SoundEffect from the app's own files; an
-    // ngfd event would need a file in /usr/share/ngfd/events.d and an ngfd
-    // restart. The Qt 6 SoundEffect problems noted above do not apply to
-    // Qt 5.6. The haptic tick is QtFeedback's ThemeEffect.
-    SoundEffect {
+    // SailfishOS: the tick plays through ToneGen.tick(), a QAudioOutput
+    // stream like the tuning fork. A SoundEffect stayed silent on the C2:
+    // its PulseAudio sample stream was held paused ("corked") by the audio
+    // policy. An ngfd event would need a system file and an ngfd restart.
+    // The haptic tick is QtFeedback's ThemeEffect.
+    QtObject {
         id: tickSound
-        source: "tick.wav"
+        function play() { ToneGen.tick() }
     }
 
     ThemeEffect {
@@ -161,8 +162,7 @@ Item {
         onTriggered: {
             tickSound.play()
             hapticFeedback.play()
-            console.log("selftest tick: status " + tickSound.status + " (2 = Ready, 3 = Error), playing " + tickSound.playing
-                        + "; haptic supported " + hapticFeedback.supported)
+            console.log("selftest tick played; haptic supported " + hapticFeedback.supported)
             ToneGen.start(440)
             selftestStop.start()
         }

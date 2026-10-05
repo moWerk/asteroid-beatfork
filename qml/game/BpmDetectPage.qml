@@ -456,9 +456,11 @@ Item {
         z: 3
         text: page.bpmValue
         font {
-            pixelSize: page.bpmValue >= 100 ? Dims.l(32) : Dims.l(36)
+            // SailfishOS: 10 % smaller and one weight lighter than on the
+            // watch (mo, 2026-10-05); the phone's width scaling made it heavy
+            pixelSize: page.bpmValue >= 100 ? Dims.l(32 * 0.9) : Dims.l(36 * 0.9)
             family:    "Noto Sans Condensed"
-            weight:    Font.Bold
+            weight:    Font.DemiBold
         }
         color:   "#ffffff"
         scale:   1.0

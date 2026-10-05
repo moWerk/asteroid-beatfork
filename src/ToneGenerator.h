@@ -15,6 +15,8 @@
 #include <QAudioOutput>
 #include <QScopedPointer>
 #include <QTimer>
+#include <QBuffer>
+#include <QByteArray>
 
 // Live sine synthesis for the tuning fork: exact frequency from math,
 // no sound file assets. A raised-cosine attack/release envelope makes
@@ -56,6 +58,8 @@ public:
 
     Q_INVOKABLE void start(double frequency);
     Q_INVOKABLE void stop();
+    // SailfishOS: plays tick.wav through its own short QAudioOutput stream
+    Q_INVOKABLE void tick();
 
     bool playing() const { return m_playing; }
 
@@ -73,6 +77,10 @@ private:
     void setPlaying(bool p);
 
     QScopedPointer<QAudioOutput> m_sink;   // SailfishOS: Qt 5.6 has QAudioOutput, not QAudioSink
+    QScopedPointer<QAudioOutput> m_tickSink;
+    QBuffer m_tickBuffer;
+    QByteArray m_tickPcm;
+    int m_tickRate = 44100;
     QTimer m_drainTimer;
     SineDevice m_device;
     bool m_playing = false;
