@@ -12,6 +12,7 @@
 #include <QAudioFormat>
 #include <QAudioDeviceInfo>
 #include <QTimer>
+#include <QDebug>
 #include <QtQml>
 #include <cmath>
 
@@ -123,6 +124,16 @@ void ToneGenerator::start(double frequency)
     m_sink->setBufferSize(kSampleRate / 4 * int(sizeof(qint16))); // 250ms
     m_sink->start(&m_device);
     setPlaying(true);
+
+    // Test hook: with SFOS_SELFTEST_AUDIO set, report the stream state
+    if (qEnvironmentVariableIsSet("SFOS_SELFTEST_AUDIO")) {
+        QAudioOutput *sink = m_sink.data();
+        QTimer::singleShot(400, this, [this, sink]() {
+            if (m_sink.data() == sink)
+                qDebug() << "selftest tone: state" << sink->state() << "error" << sink->error()
+                         << "processed us" << sink->processedUSecs();
+        });
+    }
 }
 
 void ToneGenerator::stop()

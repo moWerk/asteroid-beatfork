@@ -24,6 +24,7 @@ import Nemo.Configuration 1.0
 import QtMultimedia 5.6
 import QtFeedback 5.0
 import Nemo.KeepAlive 1.2
+import moWerk.ToneGenerator 1.0
 
 // SailfishOS: Application of org.asteroid.utils draws a radial background
 // from centerColor to outerColor; here a plain Item does the same.
@@ -151,6 +152,25 @@ Item {
     ThemeEffect {
         id: hapticFeedback
         effect: ThemeEffect.Press
+    }
+
+    // Test hook (set from main.cpp): one tick and one second of tone
+    Timer {
+        interval: 2000
+        running: typeof selftestAudio !== "undefined" && selftestAudio
+        onTriggered: {
+            tickSound.play()
+            hapticFeedback.play()
+            console.log("selftest tick: status " + tickSound.status + " (2 = Ready, 3 = Error), playing " + tickSound.playing
+                        + "; haptic supported " + hapticFeedback.supported)
+            ToneGen.start(440)
+            selftestStop.start()
+        }
+    }
+    Timer {
+        id: selftestStop
+        interval: 1000
+        onTriggered: { ToneGen.stop(); console.log("selftest tone stopped") }
     }
 
     Timer {

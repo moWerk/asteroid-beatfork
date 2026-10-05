@@ -38,6 +38,10 @@ int main(int argc, char *argv[])
         ToneGenerator::qmlInstance);
 
     QScopedPointer<QQuickView> view(SailfishApp::createView());
+    // Test hook: SFOS_SELFTEST_AUDIO=1 plays the tuning fork tone and the
+    // metronome tick once and logs their state, without a tap.
+    view->rootContext()->setContextProperty(QStringLiteral("selftestAudio"),
+                                            qEnvironmentVariableIsSet("SFOS_SELFTEST_AUDIO"));
     view->setSource(SailfishApp::pathToMainQml());
     view->show();
 
