@@ -275,8 +275,13 @@ Item {
             anchors.top:              forkButton.bottom
             anchors.horizontalCenter: forkButton.horizontalCenter
             anchors.topMargin:        Dims.h(1)
-            //% "Tap to stop"
-            text:           page.tonePlaying ? qsTrId("id-tap-to-stop") : qsTrId("id-hold-to-loop")
+            // One //% comment per qsTrId: with both on one line lupdate gave
+            // "id-hold-to-loop" no English, and the id showed on screen.
+            text:           page.tonePlaying
+                            //% "Tap to stop"
+                            ? qsTrId("id-tap-to-stop")
+                            //% "Hold to loop"
+                            : qsTrId("id-hold-to-loop")
             font.pixelSize: Dims.l(6)
             opacity: 0.6
         }
