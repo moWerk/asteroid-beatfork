@@ -1,6 +1,6 @@
 Name:       harbour-asteroid-beatfork
 Summary:    BeatFork, BPM counter, metronome and tuning fork
-Version:    1.5.0
+Version:    1.5.1
 Release:    1
 License:    GPLv3+
 URL:        https://github.com/moWerk/asteroid-beatfork

@@ -84,7 +84,7 @@ they keep the watch proportions across the phone's width.
   QtFeedback.
 - The tuning fork tone is synthesised live as on the watch, through
   Qt 5's `QAudioOutput` instead of Qt 6's `QAudioSink`.
-- Install: `devel-su pkcon install-local harbour-asteroid-beatfork-1.5.0-1.aarch64.rpm`
+- Install: `devel-su pkcon install-local harbour-asteroid-beatfork-1.5.1-1.aarch64.rpm`
   (aarch64 only).
 - Build: `mb2 -t SailfishOS-5.1.0.11-aarch64 build` with the Sailfish
   Platform SDK.
