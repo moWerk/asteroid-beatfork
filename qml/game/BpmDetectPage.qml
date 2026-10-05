@@ -7,9 +7,8 @@
  * License, or (at your option) any later version.
  */
 
-import QtQuick
-import org.asteroid.controls
-import org.asteroid.utils
+import QtQuick 2.6
+import "."
 
 Item {
     id: page
@@ -263,7 +262,7 @@ Item {
 
         Connections {
             target: page.beatSource
-            function onBeat() {
+            onBeat: {
                 if (!page.settled) return
                     pulseSmall.opacity = 1.0
                     pulseSmallOff.interval = Math.round(30000 / page.bpmValue)
@@ -323,7 +322,8 @@ Item {
                     to:          page.exitAngle
                     duration:    page.fullRevMs
                     running:     poolDot.active
-                    paused:      page.beatOffsetLocked || !page.pageActive
+                    // only pause a running animation; Qt 5.6 warns otherwise
+                    paused:      running && (page.beatOffsetLocked || !page.pageActive)
                     easing.type: Easing.Linear
                     onStopped:   if (poolDot.active && !page.beatOffsetLocked) poolDot.active = false
                 }
@@ -331,7 +331,8 @@ Item {
                 SequentialAnimation {
                     id: fadeAnim
                     running: poolDot.active
-                    paused:      page.beatOffsetLocked || !page.pageActive
+                    // only pause a running animation; Qt 5.6 warns otherwise
+                    paused:      running && (page.beatOffsetLocked || !page.pageActive)
                     PauseAnimation  { duration: page.fullRevMs * 0.65 }
                     NumberAnimation {
                         target:      poolDot
@@ -376,7 +377,7 @@ Item {
 
         Connections {
             target: page
-            function onTapCountChanged() { ripple1Anim.restart() }
+            onTapCountChanged: { ripple1Anim.restart() }
         }
     }
 
@@ -404,7 +405,7 @@ Item {
 
         Connections {
             target: page
-            function onTapCountChanged() { ripple2Anim.restart() }
+            onTapCountChanged: { ripple2Anim.restart() }
         }
     }
 
@@ -429,7 +430,7 @@ Item {
 
         Connections {
             target: page.beatSource
-            function onBeat() {
+            onBeat: {
                 if (page.settled && !page.sessionActive) tapHintPulse.restart()
             }
         }
@@ -470,7 +471,7 @@ Item {
 
         Connections {
             target: page
-            function onTapCountChanged() { labelPump.restart() }
+            onTapCountChanged: { labelPump.restart() }
         }
 
         MouseArea {

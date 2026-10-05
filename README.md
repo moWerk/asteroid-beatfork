@@ -70,3 +70,26 @@ This page is only available on watches with a speaker.
 - The BPM set on any page is shared — detect on page 1, practice on page 2
 - The screen stays on whenever the metronome, tick sound, or tuning fork is active
 
+---
+
+## SailfishOS
+
+The `sailfishos` branch is the SailfishOS version, built for Sailfish OS
+5.1 on aarch64 and run on a Jolla C2. The three pages are the watch app;
+they keep the watch proportions across the phone's width.
+
+- The metronome tick plays as a sound effect from the app's own files,
+  not through an ngfd event: an ngfd event needs a file in
+  `/usr/share/ngfd/events.d` and an ngfd restart. The vibration uses
+  QtFeedback.
+- The tuning fork tone is synthesised live as on the watch, through
+  Qt 5's `QAudioOutput` instead of Qt 6's `QAudioSink`.
+- Install: `devel-su pkcon install-local harbour-asteroid-beatfork-1.5.0-1.aarch64.rpm`
+  (aarch64 only).
+- Build: `mb2 -t SailfishOS-5.1.0.11-aarch64 build` with the Sailfish
+  Platform SDK.
+
+```
+Disclosure: LLMGD-2 · origin O0 (LLM-ported overnight; checked through window grabs on one Jolla C2; sound, vibration and tone not heard; not used or read by a human; self-graded)
+LLMGD: v0.2; assurance=A2; flags=T; origin={O0:.9,O1:.1}; origin_headline=O0; scope=port(code+assets+packaging+docs); graded-by=claude-opus-5-5; retrieval=author-side
+```

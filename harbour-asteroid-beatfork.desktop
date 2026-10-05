@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+X-Nemo-Application-Type=silica-qt5
+Icon=harbour-asteroid-beatfork
+Exec=harbour-asteroid-beatfork
+Name=BeatFork
+Comment=BPM counter, metronome and tuning fork
+
+[X-Sailjail]
+# Sandboxed. The app plays a tick and a tone (Audio) and keeps its settings in dconf.
+OrganizationName=net.mowerk
+ApplicationName=harbour-asteroid-beatfork
+Permissions=Audio

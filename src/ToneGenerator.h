@@ -12,7 +12,7 @@
 
 #include <QObject>
 #include <QIODevice>
-#include <QAudioSink>
+#include <QAudioOutput>
 #include <QScopedPointer>
 #include <QTimer>
 
@@ -59,7 +59,8 @@ public:
 
     bool playing() const { return m_playing; }
 
-    static ToneGenerator *qmlInstance(class QQmlEngine *, class QJSEngine *);
+    // Qt 5.6's qmlRegisterSingletonType wants a QObject * callback
+    static QObject *qmlInstance(class QQmlEngine *, class QJSEngine *);
     static constexpr int kPulseLatencyMs = 100;
 
 signals:
@@ -71,7 +72,7 @@ private slots:
 private:
     void setPlaying(bool p);
 
-    QScopedPointer<QAudioSink> m_sink;
+    QScopedPointer<QAudioOutput> m_sink;   // SailfishOS: Qt 5.6 has QAudioOutput, not QAudioSink
     QTimer m_drainTimer;
     SineDevice m_device;
     bool m_playing = false;

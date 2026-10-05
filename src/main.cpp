@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019 - Florent Revest <revestflo@gmail.com>
+ * Copyright (C) 2026 - Timo Könnecke <github.com/moWerk>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -15,16 +15,43 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <asteroidapp.h>
+#include <sailfishapp.h>
+#include <QFontDatabase>
+#include <QGuiApplication>
+#include <QQuickView>
+#include <QScopedPointer>
+#include <QTimer>
 #include <QtQml>
 #include "ToneGenerator.h"
 
 int main(int argc, char *argv[])
 {
+    QScopedPointer<QGuiApplication> app(SailfishApp::application(argc, argv));
+    app->setOrganizationName(QStringLiteral("net.mowerk"));
+    app->setApplicationName(QStringLiteral("harbour-asteroid-beatfork"));
+
+    // A short audio buffer keeps the metronome tick and the tone on time.
     if (!qEnvironmentVariableIsSet("PULSE_LATENCY_MSEC"))
         qputenv("PULSE_LATENCY_MSEC", QByteArray::number(ToneGenerator::kPulseLatencyMs));
     qmlRegisterSingletonType<ToneGenerator>(
         "moWerk.ToneGenerator", 1, 0, "ToneGen",
         ToneGenerator::qmlInstance);
-    return AsteroidApp::main(argc, argv);
+
+    QScopedPointer<QQuickView> view(SailfishApp::createView());
+    view->setSource(SailfishApp::pathToMainQml());
+    view->show();
+
+    // Test hook, not used in normal runs: with SFOS_SELFTEST_SHOT=<file>
+    // the window is grabbed after SFOS_SELFTEST_DELAY ms (default 6000)
+    // and saved, so a build can be checked without looking at the phone.
+    const QByteArray shot = qgetenv("SFOS_SELFTEST_SHOT");
+    if (!shot.isEmpty()) {
+        const int delay = qEnvironmentVariableIsSet("SFOS_SELFTEST_DELAY")
+                ? qgetenv("SFOS_SELFTEST_DELAY").toInt() : 6000;
+        QQuickView *v = view.data();
+        QTimer::singleShot(delay, v, [v, shot]() {
+            v->grabWindow().save(QString::fromLocal8Bit(shot));
+        });
+    }
+    return app->exec();
 }

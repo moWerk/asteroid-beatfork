@@ -7,11 +7,10 @@
  * License, or (at your option) any later version.
  */
 
-import QtQuick
-import moWerk.ToneGenerator
+import QtQuick 2.6
+import "."
+import moWerk.ToneGenerator 1.0
 
-import org.asteroid.controls
-import org.asteroid.utils
 
 Item {
     id: page
@@ -163,7 +162,7 @@ Item {
 
                 Connections {
                     target: forkButton
-                    function onRippleCountChanged() {
+                    onRippleCountChanged: {
                         if (page.tonePlaying) forkRipple1Anim.restart()
                     }
                 }
@@ -193,7 +192,7 @@ Item {
 
                 Connections {
                     target: forkButton
-                    function onRippleCountChanged() {
+                    onRippleCountChanged: {
                         if (page.tonePlaying) forkRipple2Anim.restart()
                     }
                 }

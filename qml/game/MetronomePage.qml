@@ -7,9 +7,8 @@
  * License, or (at your option) any later version.
  */
 
-import QtQuick
-import org.asteroid.controls
-import org.asteroid.utils
+import QtQuick 2.6
+import "."
 
 Item {
     id: page
@@ -94,7 +93,7 @@ Item {
 
             Connections {
                 target: page.beatSource
-                function onBeat() {
+                onBeat: {
                     if (page.settled && page.pulseVisible) pulseToggleBeat.restart()
                 }
             }
@@ -148,7 +147,7 @@ Item {
 
             Connections {
                 target: page.beatSource
-                function onBeat() {
+                onBeat: {
                     if (page.settled && page.pulseVisible) colorCycleBeat.restart()
                 }
             }
@@ -197,7 +196,7 @@ Item {
 
             Connections {
                 target: page.beatSource
-                function onBeat() {
+                onBeat: {
                     if (page.settled && page.soundActive) soundToggleBeat.restart()
                 }
             }
@@ -249,7 +248,7 @@ Item {
 
             Connections {
                 target: page.beatSource
-                function onBeat() {
+                onBeat: {
                     if (page.settled && page.hapticActive) hapticToggleBeat.restart()
                 }
             }
@@ -294,7 +293,7 @@ Item {
 
         Connections {
             target: page.beatSource
-            function onBeat() {
+            onBeat: {
                 if (page.settled && page.pulseVisible) pulseBigAnim.restart()
             }
         }
@@ -319,7 +318,7 @@ Item {
 
     Connections {
         target: bpmSpinner
-        function onCurrentIndexChanged() {
+        onCurrentIndexChanged: {
             var v = page.bpmModel[bpmSpinner.currentIndex]
             if (v !== undefined) page.bpmPending(v)
         }

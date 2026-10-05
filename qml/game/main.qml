@@ -17,20 +17,31 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import QtQuick
-import Nemo.Configuration
-import Nemo.Ngf
-import Nemo.KeepAlive
-import org.asteroid.controls
-import org.asteroid.utils
+import QtQuick 2.6
+import QtGraphicalEffects 1.0
+import "."
+import Nemo.Configuration 1.0
+import QtMultimedia 5.6
+import QtFeedback 5.0
+import Nemo.KeepAlive 1.2
 
-Application {
+// SailfishOS: Application of org.asteroid.utils draws a radial background
+// from centerColor to outerColor; here a plain Item does the same.
+Item {
     id: app    // renamed from root — root is reserved, refers to delegate scope inside ListView
 
     anchors.fill: parent
 
-    centerColor: app.pageCenterColors[pageView.currentIndex]
-    outerColor:  app.pageOuterColors[pageView.currentIndex]
+    property color centerColor: app.pageCenterColors[pageView.currentIndex]
+    property color outerColor:  app.pageOuterColors[pageView.currentIndex]
+
+    RadialGradient {
+        anchors.fill: parent
+        gradient: Gradient {
+            GradientStop { position: 0.0; color: app.centerColor }
+            GradientStop { position: 0.5; color: app.outerColor }
+        }
+    }
 
     Behavior on centerColor { ColorAnimation { duration: 300; easing.type: Easing.InOutQuad } }
     Behavior on outerColor  { ColorAnimation { duration: 300; easing.type: Easing.InOutQuad } }
@@ -128,14 +139,18 @@ Application {
     // QtMultimedia SoundEffect on Qt6 chops playback and holds the
     // PulseAudio sink open permanently (battery drain), see the
     // asteroid-launcher ngf migration.
-    NonGraphicalFeedback {
+    // SailfishOS: the tick is a SoundEffect from the app's own files; an
+    // ngfd event would need a file in /usr/share/ngfd/events.d and an ngfd
+    // restart. The Qt 6 SoundEffect problems noted above do not apply to
+    // Qt 5.6. The haptic tick is QtFeedback's ThemeEffect.
+    SoundEffect {
         id: tickSound
-        event: "beatfork-tick"
+        source: "tick.wav"
     }
 
-    NonGraphicalFeedback {
+    ThemeEffect {
         id: hapticFeedback
-        event: "press"
+        effect: ThemeEffect.Press
     }
 
     Timer {
@@ -153,7 +168,7 @@ Application {
 
     Connections {
         target: bpmConfig
-        function onValueChanged() {
+        onValueChanged: {
             beatTimer.interval = Math.max(1, Math.round(60000 / bpmConfig.value) + app.beatOffset)
             beatTimer.restart()
         }

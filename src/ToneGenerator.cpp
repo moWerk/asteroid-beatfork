@@ -10,7 +10,7 @@
 #include "ToneGenerator.h"
 
 #include <QAudioFormat>
-#include <QMediaDevices>
+#include <QAudioDeviceInfo>
 #include <QTimer>
 #include <QtQml>
 #include <cmath>
@@ -108,13 +108,18 @@ void ToneGenerator::start(double frequency)
     QAudioFormat format;
     format.setSampleRate(kSampleRate);
     format.setChannelCount(1);
-    format.setSampleFormat(QAudioFormat::Int16);
+    // SailfishOS (Qt 5.6): sample size, type, byte order and codec instead
+    // of Qt 6's setSampleFormat(Int16)
+    format.setSampleSize(16);
+    format.setSampleType(QAudioFormat::SignedInt);
+    format.setByteOrder(QAudioFormat::LittleEndian);
+    format.setCodec(QStringLiteral("audio/pcm"));
 
     m_device.configure(kSampleRate, frequency);
     if (!m_device.isOpen())
         m_device.open(QIODevice::ReadOnly | QIODevice::Unbuffered);
 
-    m_sink.reset(new QAudioSink(QMediaDevices::defaultAudioOutput(), format));
+    m_sink.reset(new QAudioOutput(QAudioDeviceInfo::defaultOutputDevice(), format));
     m_sink->setBufferSize(kSampleRate / 4 * int(sizeof(qint16))); // 250ms
     m_sink->start(&m_device);
     setPlaying(true);
@@ -155,7 +160,7 @@ void ToneGenerator::setPlaying(bool p)
     }
 }
 
-ToneGenerator *ToneGenerator::qmlInstance(QQmlEngine *, QJSEngine *)
+QObject *ToneGenerator::qmlInstance(QQmlEngine *, QJSEngine *)
 {
     return new ToneGenerator();
 }
