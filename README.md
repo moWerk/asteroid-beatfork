@@ -89,7 +89,12 @@ they keep the watch proportions across the phone's width.
 - Build: `mb2 -t SailfishOS-5.1.0.11-aarch64 build` with the Sailfish
   Platform SDK.
 
+The author tested the port on his C2. The metronome tick was silent at
+first: SailfishOS held its sound effect stream paused, so the tick now
+plays through its own audio stream like the tuning fork. The BPM number
+and the tempo names are smaller than on the watch, at his request.
+
 ```
-Disclosure: LLMGD-2 · origin O0 (LLM-ported overnight; checked through window grabs on one Jolla C2; sound, vibration and tone not heard; not used or read by a human; self-graded)
-LLMGD: v0.2; assurance=A2; flags=T; origin={O0:.9,O1:.1}; origin_headline=O0; scope=port(code+assets+packaging+docs); graded-by=claude-opus-5-5; retrieval=author-side
+Disclosure: LLMGD-3 · origin O1 (LLM-ported; the author tested it on his Jolla C2 and had the tick and the font sizes changed; code not read; self-graded)
+LLMGD: v0.2; assurance=A3; flags=U,T; origin={O0:.7,O1:.3}; origin_headline=O0; scope=port(code+assets+packaging+docs); graded-by=claude-opus-5-5; retrieval=author-side
 ```
