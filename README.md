@@ -74,6 +74,8 @@ This page is only available on watches with a speaker.
 
 ## SailfishOS
 
+Reviewing the code? Start with [review-and-architecture-hints.md](review-and-architecture-hints.md).
+
 The `sailfishos` branch is the SailfishOS version, built for Sailfish OS
 5.1 on aarch64 and run on a Jolla C2. The three pages are the watch app;
 they keep the watch proportions across the phone's width.
