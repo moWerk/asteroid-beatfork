@@ -155,6 +155,7 @@ void BpmDetector::stop()
     m_core.reset();
     if (m_bpm || m_confidence) {
         m_bpm = 0;
+        m_tempo = 0.0;
         m_confidence = 0;
         emit resultChanged();
     }
@@ -209,8 +210,9 @@ void BpmDetector::process(const qint16 *data, int count)
             emit levelChanged();
         }
         if (m_core->emitted()
-                && (m_core->bpm() != m_bpm || m_core->confidence() != m_confidence)) {
+                && (m_core->tempo() != m_tempo || m_core->confidence() != m_confidence)) {
             m_bpm = m_core->bpm();
+            m_tempo = m_core->tempo();
             m_confidence = m_core->confidence();
             emit resultChanged();
         }
@@ -253,9 +255,9 @@ bool BpmDetector::runWav(const QString &path)
     d.m_core.reset(new BpmCore(unsigned(rate)));
     d.m_mono.resize(BpmCore::HOP);
     connect(&d, &BpmDetector::resultChanged, [&d]() {
-        qInfo().noquote() << QStringLiteral("BpmDetector wav: %1 s  bpm %2  confidence %3")
+        qInfo().noquote() << QStringLiteral("BpmDetector wav: %1 s  bpm %2 (%3)  confidence %4")
                              .arg(double(d.m_frames) / d.m_format.sampleRate(), 6, 'f', 1)
-                             .arg(d.m_bpm).arg(d.m_confidence);
+                             .arg(d.m_bpm).arg(d.m_tempo, 0, 'f', 2).arg(d.m_confidence);
     });
     d.process(reinterpret_cast<const qint16 *>(pcm.constData()),
               pcm.size() / (2 * channels));

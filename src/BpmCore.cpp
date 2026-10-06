@@ -71,6 +71,7 @@ void BpmCore::reset()
     m_env.clear();
     m_recent.clear();
     m_bpm = 0;
+    m_tempo = 0.0;
     m_confidence = 0;
 }
 
@@ -144,6 +145,7 @@ void BpmCore::emitResult(double now)
     }
     if (m_recent.empty()) {
         m_bpm = 0;
+        m_tempo = 0.0;
         m_confidence = 0;
         return;
     }
@@ -153,6 +155,7 @@ void BpmCore::emitResult(double now)
         if (std::fabs(v - med) <= 0.08 * med) good.push_back(v);
     if (good.size() >= 2) med = median(good);
     const double agree = double(good.size()) / m_recent.size();
+    m_tempo = med;
     m_bpm = int(std::lround(med));
     m_confidence = int(std::lround(100.0 * agree * std::min(1.0, m_recent.size() / 4.0)));
 }
@@ -227,5 +230,30 @@ double BpmCore::pickTempo(const std::vector<double> &votes) const
         const double s = familySupport(z, c);
         if (s > bestScore) { bestScore = s; best = c; }
     }
-    return best;
+    return refine(z, best);
+}
+
+// SailfishOS addition, not in the original: the value only, never the
+// choice. aubio places beats on whole hops of its own period estimate, so
+// the votes carry about 1 % of error (a 174 loop reads 175.8, its half
+// 87.8), which halving or doubling then shows as a wrong integer. Here the
+// envelope autocorrelation peak next to the chosen tempo's lag is found
+// and interpolated between lags with a parabola. Only a peak within 3 % of
+// the pick is used; otherwise the pick stays as it is.
+double BpmCore::refine(const std::vector<double> &z, double bpm) const
+{
+    const double lag = 60.0 * m_envHz / bpm;
+    const int lo = int(std::floor(lag * 0.97)), hi = int(std::ceil(lag * 1.03));
+    if (lo < 1 || hi + 1 >= int(z.size()))
+        return bpm;
+    int peak = lo;
+    for (int i = lo; i <= hi; ++i)
+        if (z[i] > z[peak]) peak = i;
+    if (peak == lo || peak == hi)          // rising into the edge: no peak here
+        return bpm;
+    const double a = z[peak - 1], b = z[peak], c = z[peak + 1];
+    const double den = a - 2.0 * b + c;
+    const double off = den < 0 ? 0.5 * (a - c) / den : 0.0;
+    const double refined = 60.0 * m_envHz / (peak + off);
+    return std::fabs(refined - bpm) <= 0.03 * bpm ? refined : bpm;
 }

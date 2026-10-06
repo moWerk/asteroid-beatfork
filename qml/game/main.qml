@@ -117,6 +117,18 @@ Item {
         property bool sessionActive: false
         // SailfishOS: chosen audio source for tempo detection, -1 = off
         property int  listenSource:  typeof selftestListen !== "undefined" ? selftestListen : -1
+        // half or double of what the detector finds (mo, 2026-10-06): the
+        // metrical level is the hard part, 87.5 is often a 175 drum and bass.
+        // Holds while listening; a new source or stopping resets it.
+        property real listenFactor:  1.0
+        onListenSourceChanged: listenFactor = 1.0
+    }
+
+    function applyDetectedTempo() {
+        var bpm = Math.round(BpmListener.tempo * page0State.listenFactor)
+        if (bpm >= app.bpmMin && bpm <= app.bpmMax
+                && BpmListener.confidence >= 50 && bpm !== bpmConfig.value)
+            bpmConfig.value = bpm
     }
 
     // Listen only while the BPM page is in front and the app is active:
@@ -135,12 +147,7 @@ Item {
     // the metronome then follows it (its phase is not aligned to the music).
     Connections {
         target: BpmListener
-        onResultChanged: {
-            var bpm = BpmListener.bpm
-            if (bpm >= app.bpmMin && bpm <= app.bpmMax
-                    && BpmListener.confidence >= 50 && bpm !== bpmConfig.value)
-                bpmConfig.value = bpm
-        }
+        onResultChanged: app.applyDetectedTempo()
     }
 
     // Test hook: log the input level once a second while listening
@@ -151,6 +158,7 @@ Item {
         onTriggered: console.log("selftest listen: running " + BpmListener.running
                                  + " level " + BpmListener.level.toFixed(2)
                                  + " bpm " + BpmListener.bpm
+                                 + " tempo " + BpmListener.tempo.toFixed(2)
                                  + " confidence " + BpmListener.confidence
                                  + " error '" + BpmListener.error + "'")
     }
@@ -328,6 +336,11 @@ Item {
                 listenLevel:      BpmListener.level
                 listenError:      BpmListener.error
                 onListenSourceSet: page0State.listenSource = idx
+                listenFactor:     page0State.listenFactor
+                onListenFactorSet: {
+                    page0State.listenFactor = factor
+                    app.applyDetectedTempo()
+                }
             }
 
             // Stats cycler overlay — sits above PageHeader for page 0

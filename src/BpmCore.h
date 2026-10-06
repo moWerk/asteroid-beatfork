@@ -59,6 +59,7 @@ public:
     // Set by feed() every EMIT_EVERY seconds.
     bool hasResult() const { return m_bpm > 0; }
     int bpm() const { return m_bpm; }              // 0 = nothing detected
+    double tempo() const { return m_tempo; }       // the same, unrounded
     int confidence() const { return m_confidence; } // 0..100
     bool emitted() { bool e = m_emitted; m_emitted = false; return e; }
 
@@ -73,6 +74,7 @@ private:
     void emitResult(double now);   // not "emit": that is a Qt macro
     double pickTempo(const std::vector<double> &votes) const;
     double familySupport(const std::vector<double> &z, double bpm) const;
+    double refine(const std::vector<double> &z, double bpm) const;
 
     unsigned m_rate;
     double m_envHz;
@@ -88,6 +90,7 @@ private:
     double m_quietSince = -1.0;
     float m_silenceRms = 120.0f;
     int m_bpm = 0;
+    double m_tempo = 0.0;
     int m_confidence = 0;
     bool m_emitted = false;
 };

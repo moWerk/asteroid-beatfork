@@ -41,6 +41,8 @@ class BpmDetector : public QObject
     Q_PROPERTY(int source READ source WRITE setSource NOTIFY sourceChanged)   // -1 = off
     Q_PROPERTY(bool running READ running NOTIFY runningChanged)
     Q_PROPERTY(int bpm READ bpm NOTIFY resultChanged)
+    // unrounded: 87.5 doubled must give 175, not 176
+    Q_PROPERTY(qreal tempo READ tempo NOTIFY resultChanged)
     Q_PROPERTY(int confidence READ confidence NOTIFY resultChanged)
     Q_PROPERTY(qreal level READ level NOTIFY levelChanged)   // 0..1, for a meter
     Q_PROPERTY(QString error READ error NOTIFY errorChanged)
@@ -53,6 +55,7 @@ public:
     void setSource(int index);
     bool running() const { return m_input != nullptr; }
     int bpm() const { return m_bpm; }
+    qreal tempo() const { return m_tempo; }
     int confidence() const { return m_confidence; }
     qreal level() const { return m_level; }
     QString error() const { return m_error; }
@@ -96,6 +99,7 @@ private:
     double m_levelAcc = 0.0;
     int m_levelBlocks = 0;
     int m_bpm = 0;
+    qreal m_tempo = 0.0;
     int m_confidence = 0;
     qreal m_level = 0.0;
     QString m_error;

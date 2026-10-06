@@ -110,6 +110,13 @@ and how sure the detection is; a thin bar under it shows the input
 level. Once the detection is at least 50 % sure, its tempo becomes the
 app's tempo, and the metronome follows it (in tempo, not in phase).
 Tapping the BPM number takes over again and switches listening off.
+
+While listening, **½** and **×2** sit left and right of the label. The
+detector finds a pulse reliably, but whether it is the tempo, its half
+or its double is the hard part: modern electronic music at 175 often
+reads 87.5. ×2 doubles every detected value from then on, ½ halves it,
+and the other button steps back to 1. The choice holds until listening
+stops or the source changes, so the next song starts neutral.
 Listening stops on the other pages and while the app is in the
 background, so the microphone is not held.
 
@@ -122,6 +129,13 @@ seconds, smoothed over the last 8; 6 seconds of silence clear it. It
 needs 9 beats per tracker, so the first number comes after about 15
 seconds.
 
+One addition to the original: aubio places beats on whole analysis
+steps (10.7 ms), which leaves about 1 % of error in the votes, so a 174
+track read 175.8 and its half 87.8, and doubling showed 176. The chosen
+tempo is now refined from the envelope autocorrelation, interpolated
+between steps. That changes only the value, never which tempo is
+picked.
+
 aubio 0.4.9 (GPL-3.0, <https://aubio.org>) is built into the app from
 `3rdparty/aubio`, the parts the tempo trackers need; see
 `3rdparty/aubio/README.SailfishOS`.
@@ -132,11 +146,15 @@ the permission file says playback and recording can not be separated on
 PulseAudio, which suggests it does.
 
 What was checked, and what was not:
-- The C++ port gives the same results as the original Python detector
-  on the same synthetic test tracks (90, 128, 140, 168, 174 BPM). On
-  those perfectly regular loops both report half the tempo for 128,
-  140 and 174; on hip hop at 90 both are right. Real music was not
-  tried.
+- Without the refinement, the C++ port gives the same results as the
+  original Python detector on the same synthetic test tracks (90, 128,
+  140, 168, 174 BPM). On those perfectly regular loops both report half
+  the tempo for 128, 140 and 174; on hip hop at 90 both are right.
+- With the refinement every track reads within 0.2 BPM of the true
+  value at the level picked (63.95, 70.12, 86.81, 89.97, 83.97), so ×2
+  gives 128, 140, 174 and 168.
+- The author tried listening on his C2 and was happy with it; the ½ and
+  ×2 buttons came from that test.
 - The same test runs on the phone (`SFOS_SELFTEST_BPM_WAV=<16 bit wav>`,
   silent) with the same numbers on a Jolla C2 (aarch64) and a Jolla 1
   (armv7hl, SailfishOS 3.4). The Jolla 1 needs 2 to 3 seconds for 60

@@ -44,7 +44,9 @@ Item {
     property int    listenConfidence: 0
     property real   listenLevel:      0.0
     property string listenError:      ""
+    property real   listenFactor:     1.0     // 0.5, 1 or 2
     signal listenSourceSet(int idx)
+    signal listenFactorSet(real factor)
 
     // ── State ─────────────────────────────────────────────────────────────────
     property bool settled:            false
@@ -630,7 +632,8 @@ Item {
                     return qsTrId("id-listen")
                 var name = page.listenSources[page.listenSource]
                 if (page.listenError !== "") return name + " · " + page.listenError
-                if (page.listenBpm > 0) return name + " · " + page.listenConfidence + " %"
+                var f = page.listenFactor === 2 ? " · ×2" : (page.listenFactor === 0.5 ? " · ½" : "")
+                if (page.listenBpm > 0) return name + " · " + page.listenConfidence + " %" + f
                 return name + " …"
             }
             opacity: page.listenSource < 0 ? 0.5 : 0.9
@@ -656,6 +659,42 @@ Item {
             onClicked: {
                 var next = page.listenSource + 1
                 page.listenSourceSet(next >= page.listenSources.length ? -1 : next)
+            }
+        }
+    }
+
+    // ── Half / double (SailfishOS) ────────────────────────────────────────────
+    // The detector finds a pulse reliably, its metrical level less so: these
+    // halve or double what it reports, from then on until listening stops.
+    Repeater {
+        model: [ { label: "½", factor: 0.5, side: -1 }, { label: "×2", factor: 2.0, side: 1 } ]
+        Item {
+            visible: listenControl.visible && page.listenSource >= 0
+            width:  Dims.l(11)
+            height: width
+            z: 5
+            x: parent.width / 2 + modelData.side * (listenControl.width / 2 + Dims.l(2)) - width / 2
+            y: listenControl.y + listenLabel.height / 2 - height / 2
+            readonly property bool on: page.listenFactor === modelData.factor
+            Rectangle {
+                anchors.fill: parent
+                radius: width / 2
+                color: parent.on ? page.pulseColor : "#000000"
+                opacity: parent.on ? 0.8 : 0.4
+            }
+            Label {
+                anchors.centerIn: parent
+                text: modelData.label
+                font { pixelSize: Dims.l(5.5); family: "Noto Sans Condensed"; weight: Font.Bold }
+            }
+            MouseArea {
+                anchors.fill: parent
+                anchors.margins: -Dims.l(2)
+                // one step: x2 from ½ goes back to 1, x2 again from 1 gives 2
+                onClicked: {
+                    var f = page.listenFactor * modelData.factor
+                    page.listenFactorSet(Math.max(0.5, Math.min(2.0, f)))
+                }
             }
         }
     }

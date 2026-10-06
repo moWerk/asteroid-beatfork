@@ -42,7 +42,7 @@ int main(int argc, char **argv)
         frames += BpmCore::HOP;
         core.feed(mono.data(), rms, double(frames) / rate);
         if (core.emitted())
-            std::printf("%6.1f s  bpm %3d  confidence %3d\n", double(frames) / rate, core.bpm(), core.confidence());
+            std::printf("%6.1f s  bpm %3d (%6.2f)  confidence %3d\n", double(frames) / rate, core.bpm(), core.tempo(), core.confidence());
     }
     (void)dataLen;
     return 0;
