@@ -1,0 +1,5 @@
+aubio 0.4.9 (https://aubio.org, git tag 0.4.9, commit 90bd27a2), GPL-3.0-or-later,
+see COPYING and AUTHORS. Only the parts BeatFork's tempo detection needs are kept:
+src/*.c core, spectral, tempo, onset, temporal and utils. Not included: io (sndfile,
+avcodec and similar sources), pitch, notes, synth, effects. src/config.h is written
+for this build (no fftw, bundled ooura FFT). Compiled into the app by aubio.pri.

@@ -1,0 +1,20 @@
+Host tools for the tempo detection, not part of the app package.
+
+make-test-tracks.py <out dir>
+    Writes synthetic 48 kHz stereo test tracks (house 128, dubstep 140,
+    drum and bass 174, hip hop 90, jungle 168 over a half-time bass, and
+    house followed by 15 s of silence). Needs numpy.
+
+bpmtest.cpp
+    Feeds a 16 bit PCM WAV through BpmCore as the app does and prints
+    every result. Build from the repository root on a Linux host:
+
+    cd 3rdparty/aubio/src && gcc -std=c99 -O2 -DHAVE_CONFIG_H -I. -c \
+        *.c spectral/*.c tempo/*.c onset/*.c temporal/*.c utils/*.c \
+        && ar rcs /tmp/libaubio.a *.o && rm -f *.o && cd -
+    g++ -std=c++11 -O2 -I3rdparty/aubio/src src/BpmCore.cpp \
+        tools/bpmtest.cpp /tmp/libaubio.a -lm -o /tmp/bpmtest
+    /tmp/bpmtest track.wav
+
+On the phone, the app itself runs the same check without a window:
+    SFOS_SELFTEST_BPM_WAV=/path/to/track.wav harbour-asteroid-beatfork

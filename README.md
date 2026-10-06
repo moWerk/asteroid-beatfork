@@ -78,14 +78,15 @@ The `sailfishos` branch is the SailfishOS version, built for Sailfish OS
 5.1 on aarch64 and run on a Jolla C2. The three pages are the watch app;
 they keep the watch proportions across the phone's width.
 
-- The metronome tick plays as a sound effect from the app's own files,
-  not through an ngfd event: an ngfd event needs a file in
+- The metronome tick plays through the app's own audio stream, not
+  through an ngfd event: an ngfd event needs a file in
   `/usr/share/ngfd/events.d` and an ngfd restart. The vibration uses
   QtFeedback.
 - The tuning fork tone is synthesised live as on the watch, through
   Qt 5's `QAudioOutput` instead of Qt 6's `QAudioSink`.
-- Install: `devel-su pkcon install-local harbour-asteroid-beatfork-1.5.1-1.aarch64.rpm`
-  (aarch64 only).
+- Install: `devel-su pkcon install-local harbour-asteroid-beatfork-1.6.0-1.<arch>.rpm`
+  (aarch64 for 4.5 and later, armv7hl for 3.4 and later, i486 for 4.5
+  and later).
 - Build: `mb2 -t SailfishOS-5.1.0.11-aarch64 build` with the Sailfish
   Platform SDK.
 
@@ -97,4 +98,58 @@ and the tempo names are smaller than on the watch, at his request.
 ```
 Disclosure: LLMGD-3 · origin O1 (LLM-ported; the author tested it on his Jolla C2 and had the tick and the font sizes changed; code not read; self-graded)
 LLMGD: v0.2; assurance=A3; flags=U,T; origin={O0:.7,O1:.3}; origin_headline=O0; scope=port(code+assets+packaging+docs); graded-by=claude-opus-5-5; retrieval=author-side
+```
+
+### Tempo detection from audio (SailfishOS only, 1.6.0)
+
+Above the ring on the Detect BPM page sits **Listen**. Tap it to cycle
+through Off, **Microphone** and **Playback**. Playback is the monitor of
+the phone's speaker output, so it hears whatever the phone itself plays
+(a music app, a stream), without the room. The label shows the source
+and how sure the detection is; a thin bar under it shows the input
+level. Once the detection is at least 50 % sure, its tempo becomes the
+app's tempo, and the metronome follows it (in tempo, not in phase).
+Tapping the BPM number takes over again and switches listening off.
+Listening stops on the other pages and while the app is in the
+background, so the microphone is not held.
+
+The detection is a port of the BPM detector of the author's moSushi
+Klang dashboard: three aubio tempo trackers (default, specdiff, energy)
+vote with the median interval of their beats over 20 seconds, and an
+autocorrelation of the onset envelope picks the metrical level among
+half, double, 3/4 and 4/3 of those votes. A result comes every 2
+seconds, smoothed over the last 8; 6 seconds of silence clear it. It
+needs 9 beats per tracker, so the first number comes after about 15
+seconds.
+
+aubio 0.4.9 (GPL-3.0, <https://aubio.org>) is built into the app from
+`3rdparty/aubio`, the parts the tempo trackers need; see
+`3rdparty/aubio/README.SailfishOS`.
+
+The app now asks for the Microphone permission. Whether that permission
+also lets the sandboxed app record the speaker monitor is not confirmed:
+the permission file says playback and recording can not be separated on
+PulseAudio, which suggests it does.
+
+What was checked, and what was not:
+- The C++ port gives the same results as the original Python detector
+  on the same synthetic test tracks (90, 128, 140, 168, 174 BPM). On
+  those perfectly regular loops both report half the tempo for 128,
+  140 and 174; on hip hop at 90 both are right. Real music was not
+  tried.
+- The same test runs on the phone (`SFOS_SELFTEST_BPM_WAV=<16 bit wav>`,
+  silent) with the same numbers on a Jolla C2 (aarch64) and a Jolla 1
+  (armv7hl, SailfishOS 3.4). The Jolla 1 needs 2 to 3 seconds for 60
+  seconds of audio.
+- On the C2 both sources open at 48 kHz stereo; the microphone reads
+  an RMS of about 32 in a quiet room, below the silence threshold of 60.
+- Detection from the live microphone or from playback with music has
+  not been tried: it was night, and the test would have been audible.
+- All phone tests ran the app directly from a shell, outside the
+  sandbox. Started from the launcher, the first start asks for the
+  Microphone permission; that path has not been tried.
+
+```
+Disclosure: LLMGD-3 · origin O1 (detector specified by the author's own Python original; LLM-ported to C++ and integrated; compared against the original on synthetic tracks only; live music detection untested; self-graded)
+LLMGD: v0.2; assurance=A3; flags=U,T; origin={O0:.6,O1:.4}; origin_headline=O0; scope=feature(code+3rdparty+docs); graded-by=claude-opus-5-5; retrieval=author-side
 ```

@@ -23,6 +23,7 @@
 #include <QTimer>
 #include <QtQml>
 #include "ToneGenerator.h"
+#include "BpmDetector.h"
 
 int main(int argc, char *argv[])
 {
@@ -36,12 +37,26 @@ int main(int argc, char *argv[])
     qmlRegisterSingletonType<ToneGenerator>(
         "moWerk.ToneGenerator", 1, 0, "ToneGen",
         ToneGenerator::qmlInstance);
+    qmlRegisterSingletonType<BpmDetector>(
+        "moWerk.BpmDetector", 1, 0, "BpmListener",
+        BpmDetector::qmlInstance);
+
+    // Test hook: SFOS_SELFTEST_BPM_WAV=<file> runs a 16 bit WAV through the
+    // tempo detection, logs every result and exits. Silent, no window.
+    const QByteArray wav = qgetenv("SFOS_SELFTEST_BPM_WAV");
+    if (!wav.isEmpty())
+        return BpmDetector::runWav(QString::fromLocal8Bit(wav)) ? 0 : 1;
 
     QScopedPointer<QQuickView> view(SailfishApp::createView());
     // Test hook: SFOS_SELFTEST_AUDIO=1 plays the tuning fork tone and the
     // metronome tick once and logs their state, without a tap.
     view->rootContext()->setContextProperty(QStringLiteral("selftestAudio"),
                                             qEnvironmentVariableIsSet("SFOS_SELFTEST_AUDIO"));
+    // Test hook: SFOS_SELFTEST_LISTEN=<source index> starts listening at
+    // once and logs the input level, without a tap. Records, plays nothing.
+    view->rootContext()->setContextProperty(QStringLiteral("selftestListen"),
+                                            qEnvironmentVariableIsSet("SFOS_SELFTEST_LISTEN")
+                                            ? qgetenv("SFOS_SELFTEST_LISTEN").toInt() : -1);
     view->setSource(SailfishApp::pathToMainQml());
     view->show();
 

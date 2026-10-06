@@ -3,9 +3,16 @@ TARGET = harbour-asteroid-beatfork
 CONFIG += sailfishapp sailfishapp_i18n sailfishapp_i18n_idbased sailfishapp_i18n_unfinished
 
 SOURCES += src/main.cpp \
-    src/ToneGenerator.cpp
+    src/ToneGenerator.cpp \
+    src/BpmCore.cpp \
+    src/BpmDetector.cpp
 
-HEADERS += src/ToneGenerator.h
+HEADERS += src/ToneGenerator.h \
+    src/BpmCore.h \
+    src/BpmDetector.h
+
+# tempo detection: aubio 0.4.9 (GPL-3.0), built into the app
+include(3rdparty/aubio/aubio.pri)
 
 QT += multimedia
 

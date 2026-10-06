@@ -35,6 +35,17 @@ Item {
     signal beatOffsetLockToggle()
     signal bpmValueSet(int bpm)
 
+    // SailfishOS: tempo detection from audio. listenSource -1 is off,
+    // otherwise an index into listenSources (microphone, playback).
+    property var    listenSources:    []
+    property int    listenSource:     -1
+    property bool   listenRunning:    false
+    property int    listenBpm:        0
+    property int    listenConfidence: 0
+    property real   listenLevel:      0.0
+    property string listenError:      ""
+    signal listenSourceSet(int idx)
+
     // ── State ─────────────────────────────────────────────────────────────────
     property bool settled:            false
     property real lastTap:            0
@@ -593,6 +604,60 @@ Item {
         // SailfishOS: 20 % smaller than on the watch (mo, 2026-10-05)
         font { pixelSize: Dims.l(8 * 0.8); family: "Noto Sans Condensed" }
         opacity: 0.8
+    }
+
+    // ── Listen (SailfishOS) ───────────────────────────────────────────────────
+    // Tap cycles off → microphone → playback → off. Sits between the page
+    // header and the outer dot orbit; on a squarer screen it moves up to
+    // the header's lower edge.
+    Item {
+        id: listenControl
+        visible: page.listenSources.length > 0
+        width:  parent.width * 0.6
+        height: listenLabel.height + Dims.l(5)
+        anchors.horizontalCenter: parent.horizontalCenter
+        y: Math.max(Dims.h(20),
+                    parent.height / 2 - page.ringRadius - page.driftExtent - Dims.l(6) - height)
+        z: 5
+
+        Label {
+            id: listenLabel
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.top: parent.top
+            text: {
+                if (page.listenSource < 0)
+                    //% "Listen"
+                    return qsTrId("id-listen")
+                var name = page.listenSources[page.listenSource]
+                if (page.listenError !== "") return name + " · " + page.listenError
+                if (page.listenBpm > 0) return name + " · " + page.listenConfidence + " %"
+                return name + " …"
+            }
+            opacity: page.listenSource < 0 ? 0.5 : 0.9
+            font { pixelSize: Dims.l(6); family: "Noto Sans Condensed" }
+        }
+
+        // input level, so a silent source is visible at once
+        Rectangle {
+            anchors.top: listenLabel.bottom
+            anchors.topMargin: Dims.l(1.5)
+            anchors.horizontalCenter: parent.horizontalCenter
+            width:  listenLabel.width * Math.max(0.02, page.listenLevel)
+            height: Dims.l(0.8)
+            radius: height / 2
+            color:  page.pulseColor
+            visible: page.listenRunning
+            Behavior on width { NumberAnimation { duration: 150 } }
+        }
+
+        MouseArea {
+            anchors.fill: parent
+            anchors.margins: -Dims.l(3)
+            onClicked: {
+                var next = page.listenSource + 1
+                page.listenSourceSet(next >= page.listenSources.length ? -1 : next)
+            }
+        }
     }
 
     // ── Turntable zones ───────────────────────────────────────────────────────

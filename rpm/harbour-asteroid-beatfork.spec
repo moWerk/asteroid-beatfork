@@ -1,6 +1,6 @@
 Name:       harbour-asteroid-beatfork
-Summary:    BeatFork, BPM counter, metronome and tuning fork
-Version:    1.5.1
+Summary:    BeatFork, BPM counter and detector, metronome and tuning fork
+Version:    1.6.0
 Release:    1
 License:    GPLv3+
 URL:        https://github.com/moWerk/asteroid-beatfork
@@ -20,8 +20,10 @@ BuildRequires:  qt5-qttools-linguist
 BuildRequires:  pkgconfig(Qt5Multimedia)
 
 %description
-BeatFork counts the BPM you tap, runs a metronome with sound and
-vibration, and plays a tuning fork tone. Ported from AsteroidOS.
+BeatFork counts the BPM you tap or detects it from the microphone or
+from what the phone plays, runs a metronome with sound and vibration,
+and plays a tuning fork tone. Ported from AsteroidOS. The tempo
+detection uses aubio (GPL-3.0), built into the app.
 
 %prep
 %setup -q -n %{name}-%{version}

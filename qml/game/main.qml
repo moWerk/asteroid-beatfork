@@ -25,6 +25,7 @@ import QtMultimedia 5.6
 import QtFeedback 5.0
 import Nemo.KeepAlive 1.2
 import moWerk.ToneGenerator 1.0
+import moWerk.BpmDetector 1.0
 
 // SailfishOS: Application of org.asteroid.utils draws a radial background
 // from centerColor to outerColor; here a plain Item does the same.
@@ -114,6 +115,44 @@ Item {
     QtObject {
         id: page0State
         property bool sessionActive: false
+        // SailfishOS: chosen audio source for tempo detection, -1 = off
+        property int  listenSource:  typeof selftestListen !== "undefined" ? selftestListen : -1
+    }
+
+    // Listen only while the BPM page is in front and the app is active:
+    // the microphone is not held in the background or on the other pages.
+    Binding {
+        target:   BpmListener
+        property: "source"
+        // (the test hook also listens with the phone locked)
+        value:    pageView.currentIndex === 0
+                  && (Qt.application.active
+                      || (typeof selftestListen !== "undefined" && selftestListen >= 0))
+                  ? page0State.listenSource : -1
+    }
+
+    // A detected tempo becomes the app tempo once it is reasonably sure;
+    // the metronome then follows it (its phase is not aligned to the music).
+    Connections {
+        target: BpmListener
+        onResultChanged: {
+            var bpm = BpmListener.bpm
+            if (bpm >= app.bpmMin && bpm <= app.bpmMax
+                    && BpmListener.confidence >= 50 && bpm !== bpmConfig.value)
+                bpmConfig.value = bpm
+        }
+    }
+
+    // Test hook: log the input level once a second while listening
+    Timer {
+        interval: 1000
+        repeat:   true
+        running:  typeof selftestListen !== "undefined" && selftestListen >= 0
+        onTriggered: console.log("selftest listen: running " + BpmListener.running
+                                 + " level " + BpmListener.level.toFixed(2)
+                                 + " bpm " + BpmListener.bpm
+                                 + " confidence " + BpmListener.confidence
+                                 + " error '" + BpmListener.error + "'")
     }
 
     QtObject {
@@ -261,6 +300,8 @@ Item {
                 pulseColor:     app.pulseColor
                 beatSource:     app
                 onBpmValueSet: {
+                    // a tap takes over from listening
+                    page0State.listenSource = -1
                     bpmConfig.value = bpm
                     var interval  = Math.max(1, Math.round(60000 / bpmConfig.value) + app.beatOffset)
                     var elapsed   = new Date().getTime() - page0.lastPressTime
@@ -279,6 +320,14 @@ Item {
                     if (!app.beatOffsetLocked) app.beatFlash()  // instant dot on release
                 }
                 onSessionActiveChanged: page0State.sessionActive = sessionActive
+                listenSources:    BpmListener.sources
+                listenSource:     page0State.listenSource
+                listenRunning:    BpmListener.running
+                listenBpm:        BpmListener.bpm
+                listenConfidence: BpmListener.confidence
+                listenLevel:      BpmListener.level
+                listenError:      BpmListener.error
+                onListenSourceSet: page0State.listenSource = idx
             }
 
             // Stats cycler overlay — sits above PageHeader for page 0
