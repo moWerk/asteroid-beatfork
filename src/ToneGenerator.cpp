@@ -21,6 +21,17 @@
 
 static const int kSampleRate = 48000;
 static const double kAmplitude = 0.6;
+// SailfishOS: a phone speaker reproduces little below about 200 Hz, so a
+// pure sine for a bass or low guitar string is inaudible (mo, Jolla C2).
+// Below kRichBelow the tone gets overtones up to kRichTop, falling off as
+// 1/k; the ear hears the fundamental from them (the missing fundamental),
+// so the pitch is the same. Higher tones stay a pure sine.
+static const double kRichBelow = 250.0;
+static const double kRichTop = 4000.0;
+static const int kTableSize = 4096;
+// the overtone tone sounds much louder than a sine of the same peak on the
+// phone speaker; this brings it closer (mo, 2026-10-17: "a tad less loud")
+static const double kRichGain = 0.7;
 
 SineDevice::SineDevice(QObject *parent)
     : QIODevice(parent)
@@ -35,6 +46,22 @@ void SineDevice::configure(int sampleRate, double frequency)
     m_envPos = 0;
     m_envLen = sampleRate / 100;   // 10 ms
     m_phaseState = Attack;
+
+    const int harmonics = frequency < kRichBelow
+            ? qBound(1, int(kRichTop / frequency), 100) : 1;
+    m_table.resize(kTableSize);
+    double peak = 0.0;
+    for (int j = 0; j < kTableSize; ++j) {
+        const double x = 2.0 * M_PI * j / kTableSize;
+        double v = 0.0;
+        for (int k = 1; k <= harmonics; ++k)
+            v += std::sin(k * x) / k;
+        m_table[j] = float(v);
+        peak = qMax(peak, std::fabs(v));
+    }
+    const double gain = harmonics > 1 ? kRichGain : 1.0;
+    for (int j = 0; j < kTableSize; ++j)
+        m_table[j] = float(gain * m_table[j] / peak);
 }
 
 void SineDevice::beginRelease()
@@ -58,7 +85,8 @@ qint64 SineDevice::readData(char *data, qint64 maxlen)
 {
     qint16 *out = reinterpret_cast<qint16 *>(data);
     const qint64 frames = maxlen / qint64(sizeof(qint16));
-    const double step = 2.0 * M_PI * m_frequency / m_sampleRate;
+    // phase in table periods, 0..1
+    const double step = m_frequency / m_sampleRate;
 
     for (qint64 i = 0; i < frames; ++i) {
         double env = 0.0;
@@ -81,9 +109,14 @@ qint64 SineDevice::readData(char *data, qint64 maxlen)
             break;
         }
 
-        out[i] = qint16(std::lround(kAmplitude * env * 32767.0 * std::sin(m_phase)));
+        // table lookup with linear interpolation
+        const double pos = m_phase * kTableSize;
+        const int j = int(pos) % kTableSize;
+        const double frac = pos - std::floor(pos);
+        const double v = m_table[j] + frac * (m_table[(j + 1) % kTableSize] - m_table[j]);
+        out[i] = qint16(std::lround(kAmplitude * env * 32767.0 * v));
         m_phase += step;
-        if (m_phase > 2.0 * M_PI) m_phase -= 2.0 * M_PI;
+        if (m_phase >= 1.0) m_phase -= 1.0;
     }
     return frames * qint64(sizeof(qint16));
 }

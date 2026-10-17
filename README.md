@@ -86,7 +86,7 @@ tabs, as in Jolla Clock (see below).
   QtFeedback.
 - The tuning fork tone is synthesised live as on the watch, through
   Qt 5's `QAudioOutput` instead of Qt 6's `QAudioSink`.
-- Install: `devel-su pkcon install-local harbour-asteroid-beatfork-1.7.0-1.<arch>.rpm`
+- Install: `devel-su pkcon install-local harbour-asteroid-beatfork-1.8.0-1.<arch>.rpm`
   (aarch64, armv7hl and i486, all for SailfishOS 4.5 and later; 1.6.0 is
   the last version for 3.4 and the Jolla 1).
 - Build: `mb2 -t SailfishOS-5.1.0.11-aarch64 build` with the Sailfish
@@ -207,4 +207,44 @@ layout and the font choices. Not checked on the Jolla Tablet (4.6).
 ```
 Disclosure: LLMGD-3 · origin O1 (prompted by a forum post; tab design, fonts and layout chosen and set by the author on a Jolla C2; LLM-implemented; self-graded)
 LLMGD: v0.3; assurance=A3; flags=U,T; origin={O0:.5,O1:.5}; origin_headline=O1; scope=code+assets+packaging+docs; graded-by=claude-opus-5-5; retrieval=author-side
+```
+
+### Tuner (SailfishOS only, 1.8.0)
+
+The Tuning Fork tab has two modes, **Play** and **Detect**, and it now
+comes second, before the Metronome.
+
+- **Tuning** opens a list: **Concert pitch** (the reference A and its
+  historical variants, the frequencies the watch app had), guitar,
+  7-string and 8-string guitar, bass, violin and ukulele (standard tuning,
+  A4 = 440 Hz). **Tap to change** steps through the notes of the chosen
+  one and plays each for a quarter of a second.
+- **Play** plays the chosen note on the fork button, as before. A phone
+  speaker reproduces little below about 200 Hz, so notes below 250 Hz are
+  played with overtones up to 4 kHz: the ear hears the fundamental from
+  them, so a bass string is audible at its own pitch.
+- **Detect** listens to the microphone and shows how far the played note
+  is from the chosen one: the reading in Hz and cents, and a graph below,
+  ±100 cents across, the target as the centre line, a ±5 cent band for
+  in tune, the readings as a line scrolling down. An octave error of the
+  detection is folded back. **Snap to nearest note** tunes to whichever
+  note is closest instead of a chosen one.
+- The detection is aubio's yinfast pitch detector (the same aubio 0.4.9
+  as the tempo detection, its pitch part now included), about 8 readings
+  a second, smoothed. aubio's default yinfft read pure tones up to 9 %
+  sharp on the C2 and reported no confidence; a self-test
+  (`SFOS_SELFTEST_PITCH=82.41,440 harbour-asteroid-beatfork`) runs sines
+  through the same path and logs what it finds. The microphone is open
+  only on this tab in Detect mode, with the app in front.
+
+Also in 1.8.0: the swipe hints at the screen edges are gone; the tabs are
+a carousel that swipes in both directions.
+
+Checked: the author used both modes on a Jolla C2 (5.1), with his voice
+and the played notes, and set layout, graph range and loudness. The sine
+self-test hits 41.2 to 659.25 Hz within 0.1 cent.
+
+```
+Disclosure: LLMGD-3 · origin O1 (the author's feature idea and design, refined by him on a Jolla C2; LLM-implemented; checked by a self-test and by the author's use; self-graded)
+LLMGD: v0.3; assurance=A3; flags=U,T; origin={O0:.4,O1:.6}; origin_headline=O1; scope=feature(code+packaging+docs); graded-by=claude-opus-5-5; retrieval=author-side
 ```

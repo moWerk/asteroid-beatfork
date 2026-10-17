@@ -12,6 +12,7 @@
 
 #include <QObject>
 #include <QIODevice>
+#include <QVector>
 #include <QAudioOutput>
 #include <QScopedPointer>
 #include <QTimer>
@@ -45,6 +46,9 @@ private:
     int m_envPos = 0;
     int m_envLen = 480;            // 10 ms at 48 kHz
     PhaseState m_phaseState = Attack;
+    // one period of the waveform: a sine, or for low tones a sine with
+    // overtones (see configure())
+    QVector<float> m_table;
 };
 
 // SailfishOS: the metronome tick. One stream stays open while ticks come

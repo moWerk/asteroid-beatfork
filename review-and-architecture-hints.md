@@ -17,8 +17,8 @@ The port was written by an LLM (Claude), directed and tested by the author, who 
 This is the one port with compiled code, so it ships one package per architecture.
 
 - `qml/harbour-asteroid-beatfork.qml`: the Silica `ApplicationWindow`. It loads the bundled Noto Sans Condensed (`qml/game/fonts/`), sizes `Dims` from the screen width, loads the app (`game/main.qml`) and draws the cover (the tempo).
-- `qml/game/Dims.qml`, `Label.qml`, `Icon.qml`, `Indicator.qml`, `CircularSpinner.qml`, `SpinnerDelegate.qml`, `DeviceSpecs.qml`: small stand-ins for AsteroidOS's `org.asteroid.controls` and `org.asteroid.utils` that the page content still uses. Each is a few dozen lines.
-- `qml/game/main.qml`: the app frame (a private Silica `TabView` with a `TabBar`, as in Jolla Clock), the beat clock (`beatTimer`), the settings, and the wiring to the C++ singletons. The pages are `BpmDetectPage.qml` (tap BPM, turntable nudge, listen controls), `MetronomePage.qml` and `TuningForkPage.qml`.
+- `qml/game/Dims.qml`, `Label.qml`, `Icon.qml`, `CircularSpinner.qml`, `SpinnerDelegate.qml`, `DeviceSpecs.qml`: small stand-ins for AsteroidOS's `org.asteroid.controls` and `org.asteroid.utils` that the page content still uses. Each is a few dozen lines.
+- `qml/game/main.qml`: the app frame (a private Silica `TabView` with a `TabBar`, as in Jolla Clock), the beat clock (`beatTimer`), the settings, and the wiring to the C++ singletons. The pages are `BpmDetectPage.qml` (tap BPM, turntable nudge, auto detect controls), `TuningForkPage.qml` (tone and tuner, with `TunePicker.qml`) and `MetronomePage.qml`.
 - `src/ToneGenerator.*` (`ToneGen` in QML):
   - The tuning fork tone is a live sine with a raised-cosine envelope, through `QAudioOutput`.
   - The metronome tick is one persistent `QAudioOutput` stream (`TickDevice`) that plays silence between ticks. A `SoundEffect` was held paused ("corked") by SailfishOS's audio policy, and a new stream per tick played only once.
@@ -30,6 +30,9 @@ This is the one port with compiled code, so it ships one package per architectur
   - 6 s of silence clears the result.
 - `3rdparty/aubio`: aubio 0.4.9 (GPL-3.0), only the parts the trackers need, compiled in through `aubio.pri`. See `README.SailfishOS` there.
 - `tools/`: a host test harness for `BpmCore` and a generator for synthetic test tracks (`tools/README`).
+
+- `src/PitchDetector.*`: the tuner's microphone input and aubio yinfast pitch detection (window 4096, hop 1024, median of 6 hops). `SFOS_SELFTEST_PITCH` runs sines through it headless.
+- `src/ToneGenerator.*`: the tone, from a one-period wavetable; below 250 Hz with overtones so a phone speaker can play it.
 
 ## Read these first
 

@@ -24,6 +24,7 @@
 #include <QtQml>
 #include "ToneGenerator.h"
 #include "BpmDetector.h"
+#include "PitchDetector.h"
 
 int main(int argc, char *argv[])
 {
@@ -40,12 +41,24 @@ int main(int argc, char *argv[])
     qmlRegisterSingletonType<BpmDetector>(
         "moWerk.BpmDetector", 1, 0, "BpmListener",
         BpmDetector::qmlInstance);
+    qmlRegisterSingletonType<PitchDetector>(
+        "moWerk.PitchDetector", 1, 0, "PitchListener",
+        PitchDetector::qmlInstance);
 
     // Test hook: SFOS_SELFTEST_BPM_WAV=<file> runs a 16 bit WAV through the
     // tempo detection, logs every result and exits. Silent, no window.
     const QByteArray wav = qgetenv("SFOS_SELFTEST_BPM_WAV");
     if (!wav.isEmpty())
         return BpmDetector::runWav(QString::fromLocal8Bit(wav)) ? 0 : 1;
+
+    // Test hook: SFOS_SELFTEST_PITCH=<Hz>[,<Hz>...] runs sines through the
+    // tuner's pitch detection, logs the results and exits. Silent, no window.
+    const QByteArray pitch = qgetenv("SFOS_SELFTEST_PITCH");
+    if (!pitch.isEmpty()) {
+        for (const QByteArray &hz : pitch.split(','))
+            PitchDetector::runSine(hz.toDouble());
+        return 0;
+    }
 
     QScopedPointer<QQuickView> view(SailfishApp::createView());
     // Test hook: SFOS_SELFTEST_AUDIO=1 plays the tuning fork tone and the

@@ -6,4 +6,5 @@ INCLUDEPATH += $$PWD/src
 QMAKE_CFLAGS += -std=c99 -Wno-unused-parameter -Wno-sign-compare
 SOURCES += $$files($$PWD/src/*.c) $$files($$PWD/src/spectral/*.c) \
     $$files($$PWD/src/tempo/*.c) $$files($$PWD/src/onset/*.c) \
-    $$files($$PWD/src/temporal/*.c) $$files($$PWD/src/utils/*.c)
+    $$files($$PWD/src/temporal/*.c) $$files($$PWD/src/utils/*.c) \
+    $$files($$PWD/src/pitch/*.c)

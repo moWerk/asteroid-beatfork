@@ -42,8 +42,6 @@ Item {
     onPageActiveChanged: {
         if (pageActive) {
             settleTimer.restart()
-            indicatorLeft.animate()
-            if (indicatorRight.visible) indicatorRight.animate()
         } else {
             settleTimer.stop()
             settled = false
@@ -67,10 +65,6 @@ Item {
     // in the corners of a taller box, the spinner in its middle (mo, 2026-10-17).
     readonly property real boxHeight: Math.min(height, width * 1.7)
     function vh(p) { return boxHeight * p / 100 }
-
-    // ── Edge indicators ───────────────────────────────────────────────────────
-    Indicator { id: indicatorLeft;  edge: Qt.LeftEdge  }
-    Indicator { id: indicatorRight; edge: Qt.RightEdge; visible: DeviceSpecs.hasSpeaker }
 
     // ── Upper-left: pulse visibility toggle ───────────────────────────────────
     Item {

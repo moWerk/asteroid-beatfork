@@ -137,7 +137,6 @@ Item {
     onPageActiveChanged: {
         if (pageActive) {
             settleTimer.restart()
-            indicatorRight.animate()
         } else {
             consecutiveOutliers = 0
             statConfidence      = 0
@@ -180,9 +179,6 @@ Item {
                     if (trail === 3) return 0.1
                         return 0
     }
-
-    // ── Edge indicator ────────────────────────────────────────────────────────
-    Indicator { id: indicatorRight; edge: Qt.RightEdge }
 
     // ── Pause icon ────────────────────────────────────────────────────────────
     Row {

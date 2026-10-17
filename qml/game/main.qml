@@ -27,6 +27,7 @@ import QtFeedback 5.0
 import Nemo.KeepAlive 1.2
 import moWerk.ToneGenerator 1.0
 import moWerk.BpmDetector 1.0
+import moWerk.PitchDetector 1.0
 
 // SailfishOS: the three pages are tabs, as in Jolla Clock: a TabBar with
 // the titles at the top, a swipe moves between them. The ambience shows
@@ -36,14 +37,51 @@ Item {
 
     anchors.fill: parent
 
-    // the tab in front: 0 Detect BPM, 1 Metronome, 2 Tuning Fork
+    // the tab in front: 0 Detect BPM, 1 Tuning Fork, 2 Metronome
     readonly property int currentTab: tabs.currentIndex
     // for the cover
     readonly property int bpm: bpmConfig.value
 
     ConfigurationValue { id: bpmConfig;   key: "/asteroid/apps/beatfork/bpm";        defaultValue: 120 }
-    ConfigurationValue { id: freqConfig;  key: "/asteroid/apps/beatfork/freq";       defaultValue: 440 }
     ConfigurationValue { id: colorConfig; key: "/asteroid/apps/beatfork/colorIndex"; defaultValue: 0   }
+    // SailfishOS: what the Tuning Fork page plays and tunes to, a category
+    // and an entry in it
+    ConfigurationValue { id: categoryConfig; key: "/apps/harbour-asteroid-beatfork/tuneCategory"; defaultValue: 0 }
+    ConfigurationValue { id: entryConfig;    key: "/apps/harbour-asteroid-beatfork/tuneEntry";    defaultValue: 3 }
+
+    function strings(names, hz) {
+        var out = []
+        for (var i = 0; i < names.length; i++) out.push({ name: names[i], hz: hz[i] })
+        return out
+    }
+
+    // Standard tunings, A4 = 440 Hz, strings from low to high
+    readonly property var tuneCategories: [
+        //% "Concert pitch"
+        { name: qsTrId("id-concert-pitch"),
+          items: strings(app.freqNames, app.freqModel) },
+        //% "Guitar"
+        { name: qsTrId("id-guitar"),
+          items: strings(["E2", "A2", "D3", "G3", "B3", "E4"],
+                         [82.41, 110.00, 146.83, 196.00, 246.94, 329.63]) },
+        //% "7-string guitar"
+        { name: qsTrId("id-guitar-7"),
+          items: strings(["B1", "E2", "A2", "D3", "G3", "B3", "E4"],
+                         [61.74, 82.41, 110.00, 146.83, 196.00, 246.94, 329.63]) },
+        //% "8-string guitar"
+        { name: qsTrId("id-guitar-8"),
+          items: strings(["F♯1", "B1", "E2", "A2", "D3", "G3", "B3", "E4"],
+                         [46.25, 61.74, 82.41, 110.00, 146.83, 196.00, 246.94, 329.63]) },
+        //% "Bass"
+        { name: qsTrId("id-bass"),
+          items: strings(["E1", "A1", "D2", "G2"], [41.20, 55.00, 73.42, 98.00]) },
+        //% "Violin"
+        { name: qsTrId("id-violin"),
+          items: strings(["G3", "D4", "A4", "E5"], [196.00, 293.66, 440.00, 659.26]) },
+        //% "Ukulele"
+        { name: qsTrId("id-ukulele"),
+          items: strings(["G4", "C4", "E4", "A4"], [392.00, 261.63, 329.63, 440.00]) }
+    ]
 
     readonly property int bpmMin:           40
     readonly property int bpmMax:           208
@@ -94,14 +132,6 @@ Item {
 
     readonly property string pulseColor: pulseColors[colorConfig.value]
 
-    readonly property var pageTitles: [
-        //% "Detect BPM"
-        qsTrId("id-detect-bpm"),
-        //% "Metronome"
-        qsTrId("id-metronome"),
-        //% "Tuning Fork"
-        qsTrId("id-tuning-fork")
-    ]
 
     QtObject {
         id: page0State
@@ -165,6 +195,17 @@ Item {
     QtObject {
         id: page2State
         property bool loopActive: false
+        // SailfishOS: false plays the reference tone, true is the tuner;
+        // snap tunes to the nearest note instead of the chosen one
+        property bool detectMode: false
+        property bool snap:       false
+    }
+
+    // The tuner listens only on its tab, in detect mode, with the app in front.
+    Binding {
+        target:   PitchListener
+        property: "active"
+        value:    app.currentTab === 1 && page2State.detectMode && Qt.application.active
     }
 
     DisplayBlanking {
@@ -283,16 +324,18 @@ Item {
                     title: qsTrId("id-detect-bpm")
                 }
                 ListElement {
-                    //% "Metronome"
-                    title: qsTrId("id-metronome")
-                }
-                ListElement {
                     //% "Tuning Fork"
                     title: qsTrId("id-tuning-fork")
                 }
+                ListElement {
+                    //% "Metronome"
+                    title: qsTrId("id-metronome")
+                }
             }
         }
-        model: DeviceSpecs.hasSpeaker ? [bpmTab, metronomeTab, forkTab] : [bpmTab, metronomeTab]
+        // SailfishOS: the tuner made the fork page the richer one, so it
+        // comes second (mo, 2026-10-17)
+        model: [bpmTab, forkTab, metronomeTab]
     }
 
     Component {
@@ -374,7 +417,7 @@ Item {
 
             MetronomePage {
                 anchors.fill:   parent
-                pageActive:     app.currentTab === 1
+                pageActive:     app.currentTab === 2
                 bpmValue:       bpmConfig.value
                 bpmMin:         app.bpmMin
                 bpmMax:         app.bpmMax
@@ -408,14 +451,19 @@ Item {
 
             TuningForkPage {
                 anchors.fill: parent
-                pageActive:   app.currentTab === 2
-                freqValue:    freqConfig.value
-                freqModel:    app.freqModel
-                freqNames:    app.freqNames
-                pulseColor:   app.pulseColor
-                loopActive:   page2State.loopActive
-                onFreqValueSet:  freqConfig.value      = freq
-                onLoopActiveSet: page2State.loopActive = active
+                pageActive:   app.currentTab === 1
+                categories:    app.tuneCategories
+                categoryIndex: Math.max(0, Math.min(app.tuneCategories.length - 1, categoryConfig.value))
+                entryIndex:    entryConfig.value
+                pulseColor:    app.pulseColor
+                loopActive:    page2State.loopActive
+                detectMode:    page2State.detectMode
+                snap:          page2State.snap
+                onCategoryIndexSet: { categoryConfig.value = idx; entryConfig.value = idx === 0 ? 3 : 0 }
+                onEntryIndexSet:    entryConfig.value      = idx
+                onLoopActiveSet:    page2State.loopActive = active
+                onDetectModeSet:    page2State.detectMode = on
+                onSnapSet:          page2State.snap       = on
             }
         }
     }

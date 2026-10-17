@@ -5,11 +5,13 @@ CONFIG += sailfishapp sailfishapp_i18n sailfishapp_i18n_idbased sailfishapp_i18n
 SOURCES += src/main.cpp \
     src/ToneGenerator.cpp \
     src/BpmCore.cpp \
-    src/BpmDetector.cpp
+    src/BpmDetector.cpp \
+    src/PitchDetector.cpp
 
 HEADERS += src/ToneGenerator.h \
     src/BpmCore.h \
-    src/BpmDetector.h
+    src/BpmDetector.h \
+    src/PitchDetector.h
 
 # tempo detection: aubio 0.4.9 (GPL-3.0), built into the app
 include(3rdparty/aubio/aubio.pri)
