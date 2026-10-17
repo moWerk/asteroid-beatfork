@@ -18,7 +18,8 @@
  */
 
 import QtQuick 2.6
-import QtGraphicalEffects 1.0
+import Sailfish.Silica 1.0
+import Sailfish.Silica.private 1.0
 import "."
 import Nemo.Configuration 1.0
 import QtMultimedia 5.6
@@ -27,33 +28,23 @@ import Nemo.KeepAlive 1.2
 import moWerk.ToneGenerator 1.0
 import moWerk.BpmDetector 1.0
 
-// SailfishOS: Application of org.asteroid.utils draws a radial background
-// from centerColor to outerColor; here a plain Item does the same.
+// SailfishOS: the three pages are tabs, as in Jolla Clock: a TabBar with
+// the titles at the top, a swipe moves between them. The ambience shows
+// through. TabView is private Silica API (fine for Chum, not for the store).
 Item {
     id: app    // renamed from root — root is reserved, refers to delegate scope inside ListView
 
     anchors.fill: parent
 
-    property color centerColor: app.pageCenterColors[pageView.currentIndex]
-    property color outerColor:  app.pageOuterColors[pageView.currentIndex]
-
-    RadialGradient {
-        anchors.fill: parent
-        gradient: Gradient {
-            GradientStop { position: 0.0; color: app.centerColor }
-            GradientStop { position: 0.5; color: app.outerColor }
-        }
-    }
-
-    Behavior on centerColor { ColorAnimation { duration: 300; easing.type: Easing.InOutQuad } }
-    Behavior on outerColor  { ColorAnimation { duration: 300; easing.type: Easing.InOutQuad } }
+    // the tab in front: 0 Detect BPM, 1 Metronome, 2 Tuning Fork
+    readonly property int currentTab: tabs.currentIndex
+    // for the cover
+    readonly property int bpm: bpmConfig.value
 
     ConfigurationValue { id: bpmConfig;   key: "/asteroid/apps/beatfork/bpm";        defaultValue: 120 }
     ConfigurationValue { id: freqConfig;  key: "/asteroid/apps/beatfork/freq";       defaultValue: 440 }
     ConfigurationValue { id: colorConfig; key: "/asteroid/apps/beatfork/colorIndex"; defaultValue: 0   }
 
-    readonly property var pageCenterColors: ["#1C325F", "#13213F", "#1A3360"]
-    readonly property var pageOuterColors:  ["#090B0C", "#050708", "#070909"]
     readonly property int bpmMin:           40
     readonly property int bpmMax:           208
     readonly property int bpmModelCount:    bpmMax - bpmMin + 1
@@ -137,7 +128,7 @@ Item {
         target:   BpmListener
         property: "source"
         // (the test hook also listens with the phone locked)
-        value:    pageView.currentIndex === 0
+        value:    app.currentTab === 0
                   && (Qt.application.active
                       || (typeof selftestListen !== "undefined" && selftestListen >= 0))
                   ? page0State.listenSource : -1
@@ -281,83 +272,109 @@ Item {
             if (page1State.hapticActive) hapticFeedback.play()
     }
 
-    ListView {
-        id: pageView
-        anchors.fill:       parent
-        orientation:        ListView.Horizontal
-        snapMode:           ListView.SnapOneItem
-        highlightRangeMode: ListView.StrictlyEnforceRange
-        flickDeceleration:  5000
-        flickableDirection: Flickable.HorizontalFlick
-        boundsBehavior:     Flickable.StopAtBounds
-        model: DeviceSpecs.hasSpeaker ? 3 : 2
-
-        delegate: Item {
-            width:  pageView.width
-            height: pageView.height
-
-            BpmDetectPage {
-                id: page0
-                anchors.fill:   parent
-                visible:        index === 0
-                pageActive:     pageView.currentIndex === 0
-                bpmValue:       bpmConfig.value
-                bpmMin:         app.bpmMin
-                bpmMax:         app.bpmMax
-                sessionBreakMs: app.sessionBreakMs
-                pulseColor:     app.pulseColor
-                beatSource:     app
-                onBpmValueSet: {
-                    // a tap takes over from listening
-                    page0State.listenSource = -1
-                    bpmConfig.value = bpm
-                    var interval  = Math.max(1, Math.round(60000 / bpmConfig.value) + app.beatOffset)
-                    var elapsed   = new Date().getTime() - page0.lastPressTime
-                    var remaining = Math.max(1, interval - (elapsed % interval))
-                    beatTimer.interval = remaining
-                    beatTimer.restart()
+    TabView {
+        id: tabs
+        anchors.fill: parent
+        currentIndex: 0
+        header: TabBar {
+            model: ListModel {
+                ListElement {
+                    //% "Detect BPM"
+                    title: qsTrId("id-detect-bpm")
                 }
-                tapDotColor:    app.pulseColors[(colorConfig.value + 1) % app.pulseColors.length]
-                beatOffset:       app.beatOffset
-                beatOffsetLocked: app.beatOffsetLocked
-                onBeatOffsetDelta: {
-                    app.beatOffset = Math.max(-300, Math.min(300, app.beatOffset + ms)) | 0
+                ListElement {
+                    //% "Metronome"
+                    title: qsTrId("id-metronome")
                 }
-                onBeatOffsetLockToggle: {
-                    app.beatOffsetLocked = !app.beatOffsetLocked
-                    if (!app.beatOffsetLocked) app.beatFlash()  // instant dot on release
-                }
-                onSessionActiveChanged: page0State.sessionActive = sessionActive
-                listenSources:    BpmListener.sources
-                listenSource:     page0State.listenSource
-                listenRunning:    BpmListener.running
-                listenBpm:        BpmListener.bpm
-                listenConfidence: BpmListener.confidence
-                listenLevel:      BpmListener.level
-                listenError:      BpmListener.error
-                onListenSourceSet: page0State.listenSource = idx
-                listenFactor:     page0State.listenFactor
-                onListenFactorSet: {
-                    page0State.listenFactor = factor
-                    app.applyDetectedTempo()
+                ListElement {
+                    //% "Tuning Fork"
+                    title: qsTrId("id-tuning-fork")
                 }
             }
+        }
+        model: DeviceSpecs.hasSpeaker ? [bpmTab, metronomeTab, forkTab] : [bpmTab, metronomeTab]
+    }
 
-            // Stats cycler overlay — sits above PageHeader for page 0
-            MouseArea {
-                anchors.top:    parent.top
-                anchors.left:   parent.left
-                anchors.right:  parent.right
-                height:         Dims.h(20)
-                z: 100
-                enabled: pageView.currentIndex === 0
-                onClicked: page0.statsCycleTap++
+    Component {
+        id: bpmTab
+        TabItem {
+            // the tab view sizes each tab by its implicit size
+            implicitWidth: tabs.width
+            implicitHeight: tabs.height - tabs.tabBarHeight
+
+            Item {
+                id: bpmArea
+                anchors.fill: parent
+
+                BpmDetectPage {
+                    id: page0
+                    anchors.fill:   parent
+                    pageActive:     app.currentTab === 0
+                    bpmValue:       bpmConfig.value
+                    bpmMin:         app.bpmMin
+                    bpmMax:         app.bpmMax
+                    sessionBreakMs: app.sessionBreakMs
+                    pulseColor:     app.pulseColor
+                    beatSource:     app
+                    onBpmValueSet: {
+                        // a tap takes over from listening
+                        page0State.listenSource = -1
+                        bpmConfig.value = bpm
+                        var interval  = Math.max(1, Math.round(60000 / bpmConfig.value) + app.beatOffset)
+                        var elapsed   = new Date().getTime() - page0.lastPressTime
+                        var remaining = Math.max(1, interval - (elapsed % interval))
+                        beatTimer.interval = remaining
+                        beatTimer.restart()
+                    }
+                    tapDotColor:    app.pulseColors[(colorConfig.value + 1) % app.pulseColors.length]
+                    beatOffset:       app.beatOffset
+                    beatOffsetLocked: app.beatOffsetLocked
+                    onBeatOffsetDelta: {
+                        app.beatOffset = Math.max(-300, Math.min(300, app.beatOffset + ms)) | 0
+                    }
+                    onBeatOffsetLockToggle: {
+                        app.beatOffsetLocked = !app.beatOffsetLocked
+                        if (!app.beatOffsetLocked) app.beatFlash()  // instant dot on release
+                    }
+                    onSessionActiveChanged: page0State.sessionActive = sessionActive
+                    listenSources:    BpmListener.sources
+                    listenSource:     page0State.listenSource
+                    listenRunning:    BpmListener.running
+                    listenBpm:        BpmListener.bpm
+                    listenConfidence: BpmListener.confidence
+                    listenLevel:      BpmListener.level
+                    listenError:      BpmListener.error
+                    onListenSourceSet: page0State.listenSource = idx
+                    listenFactor:     page0State.listenFactor
+                    onListenFactorSet: {
+                        page0State.listenFactor = factor
+                        app.applyDetectedTempo()
+                    }
+                }
+
+                // Stats cycler overlay over the top of the BPM page
+                MouseArea {
+                    anchors.top:    parent.top
+                    anchors.left:   parent.left
+                    anchors.right:  parent.right
+                    height:         Dims.h(20)
+                    z: 100
+                    onClicked: page0.statsCycleTap++
+                }
             }
+        }
+    }
+
+    Component {
+        id: metronomeTab
+        TabItem {
+            // the tab view sizes each tab by its implicit size
+            implicitWidth: tabs.width
+            implicitHeight: tabs.height - tabs.tabBarHeight
 
             MetronomePage {
                 anchors.fill:   parent
-                visible:        index === 1
-                pageActive:     pageView.currentIndex === 1
+                pageActive:     app.currentTab === 1
                 bpmValue:       bpmConfig.value
                 bpmMin:         app.bpmMin
                 bpmMax:         app.bpmMax
@@ -379,11 +396,19 @@ Item {
                     spinnerDebounce.restart()
                 }
             }
+        }
+    }
+
+    Component {
+        id: forkTab
+        TabItem {
+            // the tab view sizes each tab by its implicit size
+            implicitWidth: tabs.width
+            implicitHeight: tabs.height - tabs.tabBarHeight
 
             TuningForkPage {
                 anchors.fill: parent
-                visible:      index === 2
-                pageActive:   pageView.currentIndex === 2
+                pageActive:   app.currentTab === 2
                 freqValue:    freqConfig.value
                 freqModel:    app.freqModel
                 freqNames:    app.freqNames
@@ -393,22 +418,5 @@ Item {
                 onLoopActiveSet: page2State.loopActive = active
             }
         }
-    }
-
-    PageHeader {
-        text: app.pageTitles[pageView.currentIndex]
-        enabled: !(pageView.currentIndex === 0 && page0State.sessionActive)
-        opacity: (pageView.currentIndex === 1 && page1State.pulseVisible) ||
-        (pageView.currentIndex === 0 && page0State.sessionActive) ? 0.0 : 1.0
-        Behavior on opacity { NumberAnimation { duration: 300; easing.type: Easing.InOutQuad } }
-    }
-
-    PageDot {
-        anchors.horizontalCenter: parent.horizontalCenter
-        anchors.bottom:           parent.bottom
-        anchors.bottomMargin:     Dims.h(4)
-        height:       Dims.h(3)
-        dotNumber:    DeviceSpecs.hasSpeaker ? 3 : 2
-        currentIndex: pageView.currentIndex
     }
 }

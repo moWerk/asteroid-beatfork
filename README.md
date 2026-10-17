@@ -77,8 +77,8 @@ This page is only available on watches with a speaker.
 Reviewing the code? Start with [review-and-architecture-hints.md](review-and-architecture-hints.md).
 
 The `sailfishos` branch is the SailfishOS version, built for Sailfish OS
-5.1 on aarch64 and run on a Jolla C2. The three pages are the watch app;
-they keep the watch proportions across the phone's width.
+5.1 on aarch64 and run on a Jolla C2. Since 1.7.0 the three pages are
+tabs, as in Jolla Clock (see below).
 
 - The metronome tick plays through the app's own audio stream, not
   through an ngfd event: an ngfd event needs a file in
@@ -86,9 +86,9 @@ they keep the watch proportions across the phone's width.
   QtFeedback.
 - The tuning fork tone is synthesised live as on the watch, through
   Qt 5's `QAudioOutput` instead of Qt 6's `QAudioSink`.
-- Install: `devel-su pkcon install-local harbour-asteroid-beatfork-1.6.0-1.<arch>.rpm`
-  (aarch64 for 4.5 and later, armv7hl for 3.4 and later, i486 for 4.5
-  and later).
+- Install: `devel-su pkcon install-local harbour-asteroid-beatfork-1.7.0-1.<arch>.rpm`
+  (aarch64, armv7hl and i486, all for SailfishOS 4.5 and later; 1.6.0 is
+  the last version for 3.4 and the Jolla 1).
 - Build: `mb2 -t SailfishOS-5.1.0.11-aarch64 build` with the Sailfish
   Platform SDK.
 
@@ -172,4 +172,39 @@ What was checked, and what was not:
 ```
 Disclosure: LLMGD-3 · origin O1 (detector specified by the author's own Python original; LLM-ported to C++ and integrated; compared against the original on synthetic tracks only; live music detection untested; self-graded)
 LLMGD: v0.2; assurance=A3; flags=U,T; origin={O0:.6,O1:.4}; origin_headline=O0; scope=feature(code+3rdparty+docs); graded-by=claude-opus-5-5; retrieval=author-side
+```
+
+### Tabs, the condensed font, a taller layout (1.7.0)
+
+Forum user nthn pointed out that Silica is more than a transparent theme.
+Up to 1.6.0 the app ran the watch interface inside a SailfishOS page, with
+its own gradient over the ambience, page dots and a watch page header.
+
+- The three pages are tabs with a tab bar at the top, as in Jolla Clock and
+  Settings; a swipe still moves between them. The ambience shows through.
+  The tab view is private Silica API: fine for Chum, not for the Jolla
+  Store, and its SailfishOS 3.4 version is a different design, so 1.7.0
+  needs SailfishOS 4.5 or later.
+- The watch asks for Noto Sans Condensed, which SailfishOS does not have,
+  so the BPM number came out in the much wider Sail Sans. The app now
+  brings the three condensed cuts AsteroidOS ships (OFL). Qt files them as
+  family "Noto Sans" with the styles "Condensed", "Condensed SemiBold" and
+  "Condensed Bold", so they are asked for by family and style name.
+- Detect BPM: **Listen** is **Auto Detect**. One percentage, in the ring:
+  after taps it shows the tap statistics, while auto detect has a tempo
+  its confidence. The ½ and ×2 buttons are one text toggle below the
+  source and the level meter (detected, double, half tempo), shown once a
+  tempo is found. The pause symbol sits below the circle, in the middle of
+  the area that pauses.
+- Metronome: the buttons sit in the corners of a taller box instead of a
+  square, the spinner shows seven values with 10 % larger numbers.
+- Tuning Fork: the button sits higher, with room for its hint.
+- The cover shows the tempo.
+
+Checked: the author used all three pages on a Jolla C2 (5.1) and set the
+layout and the font choices. Not checked on the Jolla Tablet (4.6).
+
+```
+Disclosure: LLMGD-3 · origin O1 (prompted by a forum post; tab design, fonts and layout chosen and set by the author on a Jolla C2; LLM-implemented; self-graded)
+LLMGD: v0.3; assurance=A3; flags=U,T; origin={O0:.5,O1:.5}; origin_headline=O1; scope=code+assets+packaging+docs; graded-by=claude-opus-5-5; retrieval=author-side
 ```

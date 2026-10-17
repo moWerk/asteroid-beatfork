@@ -128,6 +128,8 @@ Item {
         Item {
             id: forkButton
             anchors.centerIn: parent
+            // SailfishOS: closer to the page centre, the hint gets room (mo, 2026-10-17)
+            anchors.verticalCenterOffset: -Dims.l(10)
             width:  Dims.l(30)
             height: Dims.l(30)
 
@@ -274,7 +276,7 @@ Item {
         Label {
             anchors.top:              forkButton.bottom
             anchors.horizontalCenter: forkButton.horizontalCenter
-            anchors.topMargin:        Dims.h(1)
+            anchors.topMargin:        Dims.h(6)
             // One //% comment per qsTrId: with both on one line lupdate gave
             // "id-hold-to-loop" no English, and the id showed on screen.
             text:           page.tonePlaying

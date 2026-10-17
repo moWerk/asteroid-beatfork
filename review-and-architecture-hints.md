@@ -16,9 +16,9 @@ The port was written by an LLM (Claude), directed and tested by the author, who 
 
 This is the one port with compiled code, so it ships one package per architecture.
 
-- `qml/harbour-asteroid-beatfork.qml`: the Silica `ApplicationWindow`. It sizes `Dims` from the screen width, then loads the app (`game/main.qml`). When the app goes to the background, the same item is moved into the cover and scaled down, so the home screen tile shows it live. The same shell is used in all eight ports.
-- `qml/game/Dims.qml`, `Label.qml`, `HighlightBar.qml`, `Icon.qml`, `PageHeader.qml`, `ValueCycler.qml`, `IntSelector.qml`, `DeviceSpecs.qml` (whichever exist here): small stand-ins for AsteroidOS's `org.asteroid.controls` and `org.asteroid.utils`, so the watch QML runs unchanged where possible. Each is a few dozen lines.
-- `qml/game/main.qml`: the app frame, the beat clock (`beatTimer`), the settings, and the wiring to the C++ singletons. The pages are `BpmDetectPage.qml` (tap BPM, turntable nudge, listen controls), `MetronomePage.qml` and `TuningForkPage.qml`.
+- `qml/harbour-asteroid-beatfork.qml`: the Silica `ApplicationWindow`. It loads the bundled Noto Sans Condensed (`qml/game/fonts/`), sizes `Dims` from the screen width, loads the app (`game/main.qml`) and draws the cover (the tempo).
+- `qml/game/Dims.qml`, `Label.qml`, `Icon.qml`, `Indicator.qml`, `CircularSpinner.qml`, `SpinnerDelegate.qml`, `DeviceSpecs.qml`: small stand-ins for AsteroidOS's `org.asteroid.controls` and `org.asteroid.utils` that the page content still uses. Each is a few dozen lines.
+- `qml/game/main.qml`: the app frame (a private Silica `TabView` with a `TabBar`, as in Jolla Clock), the beat clock (`beatTimer`), the settings, and the wiring to the C++ singletons. The pages are `BpmDetectPage.qml` (tap BPM, turntable nudge, listen controls), `MetronomePage.qml` and `TuningForkPage.qml`.
 - `src/ToneGenerator.*` (`ToneGen` in QML):
   - The tuning fork tone is a live sine with a raised-cosine envelope, through `QAudioOutput`.
   - The metronome tick is one persistent `QAudioOutput` stream (`TickDevice`) that plays silence between ticks. A `SoundEffect` was held paused ("corked") by SailfishOS's audio policy, and a new stream per tick played only once.

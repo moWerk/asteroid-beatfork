@@ -1,0 +1,6 @@
+Noto Sans Condensed (Condensed, Condensed SemiBold, Condensed Bold): the
+hinted files AsteroidOS ships (github.com/AsteroidOS/asteroid-fonts),
+subset to Latin with fonttools pyftsubset, hinting kept.
+Copyright 2022 The Noto Project Authors, SIL Open Font License 1.1 (OFL.txt).
+Qt registers them as family "Noto Sans" with those style names; ask for
+them with font.family "Noto Sans" and font.styleName.

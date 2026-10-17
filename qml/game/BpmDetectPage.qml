@@ -187,8 +187,9 @@ Item {
     // ── Pause icon ────────────────────────────────────────────────────────────
     Row {
         id: pauseIcon
-        anchors.verticalCenter:       pulseSmall.bottom
-        anchors.verticalCenterOffset: -Dims.l(1)
+        // SailfishOS: the pause zone is the lower part of the page, so the
+        // symbol sits in its middle, below the circle (mo, 2026-10-17)
+        y: (parent.height / 2 + page.ringRadius + parent.height) / 2 - height / 2
         anchors.horizontalCenter:     pulseSmall.horizontalCenter
         spacing: Dims.l(4)
         z: 0
@@ -222,8 +223,8 @@ Item {
                 opacity:        page.chevronOpacity(index, page.indicatorPhase)
                 font {
                     pixelSize: Dims.l(14)
-                    family:    "Noto Sans Condensed"
-                    weight:    Font.Bold
+                    family:    "Noto Sans"
+                    styleName: "Condensed Bold"
                 }
             }
         }
@@ -247,8 +248,8 @@ Item {
                 opacity:        page.chevronOpacity(index, page.indicatorPhase)
                 font {
                     pixelSize: Dims.l(14)
-                    family:    "Noto Sans Condensed"
-                    weight:    Font.Bold
+                    family:    "Noto Sans"
+                    styleName: "Condensed Bold"
                 }
             }
         }
@@ -431,9 +432,9 @@ Item {
         z: 3
         //% "Tap"
         text:    qsTrId("id-tap")
-        visible: !page.sessionActive
+        visible: !page.sessionActive && !page.autoShown
         opacity: 0.4
-        font { pixelSize: Dims.l(9); weight: Font.Bold }
+        font { pixelSize: Dims.l(9); family: "Sail Sans Pro"; weight: Font.Bold }
 
         SequentialAnimation {
             id: tapHintPulse
@@ -456,10 +457,12 @@ Item {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.topMargin:        Dims.h(9)
         z: 3
-        visible: page.sessionActive
-        text:    page.statusOrStats()
+        // SailfishOS: one percentage display. After a tap it shows the tap
+        // statistics, while auto detect has a tempo its confidence.
+        visible: page.sessionActive || page.autoShown
+        text:    page.sessionActive ? page.statusOrStats() : page.listenConfidence + " %"
         opacity: 0.8
-        font { pixelSize: Dims.l(8); family: "Noto Sans Condensed" }
+        font { pixelSize: Dims.l(8); family: "Sail Sans Pro" }
     }
 
     // ── BPM label — tap target ────────────────────────────────────────────────
@@ -472,8 +475,8 @@ Item {
             // SailfishOS: 10 % smaller and one weight lighter than on the
             // watch (mo, 2026-10-05); the phone's width scaling made it heavy
             pixelSize: page.bpmValue >= 100 ? Dims.l(32 * 0.9) : Dims.l(36 * 0.9)
-            family:    "Noto Sans Condensed"
-            weight:    Font.DemiBold
+            family:    "Noto Sans"
+            styleName: "Condensed SemiBold"
         }
         color:   "#ffffff"
         scale:   1.0
@@ -604,97 +607,93 @@ Item {
                                                     else                return "Prestissimo"
         }
         // SailfishOS: 20 % smaller than on the watch (mo, 2026-10-05)
-        font { pixelSize: Dims.l(8 * 0.8); family: "Noto Sans Condensed" }
+        font { pixelSize: Dims.l(8 * 0.8); family: "Sail Sans Pro" }
         opacity: 0.8
     }
 
-    // ── Listen (SailfishOS) ───────────────────────────────────────────────────
-    // Tap cycles off → microphone → playback → off. Sits between the page
-    // header and the outer dot orbit; on a squarer screen it moves up to
-    // the header's lower edge.
-    Item {
+    readonly property bool autoShown: listenSource >= 0 && listenBpm > 0 && listenError === ""
+
+    // ── Detect (SailfishOS) ───────────────────────────────────────────────────
+    // Tap the source name: off → microphone → playback → off. Below it the
+    // input level, and once a tempo is found a toggle for its metrical level.
+    // Sits between the tab bar and the outer dot orbit.
+    Column {
         id: listenControl
         visible: page.listenSources.length > 0
         width:  parent.width * 0.6
-        height: listenLabel.height + Dims.l(5)
         anchors.horizontalCenter: parent.horizontalCenter
-        y: Math.max(Dims.h(20),
+        y: Math.max(Dims.l(4),
                     parent.height / 2 - page.ringRadius - page.driftExtent - Dims.l(6) - height)
         z: 5
+        spacing: Dims.l(4)
 
-        Label {
-            id: listenLabel
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.top: parent.top
-            text: {
-                if (page.listenSource < 0)
-                    //% "Listen"
-                    return qsTrId("id-listen")
-                var name = page.listenSources[page.listenSource]
-                if (page.listenError !== "") return name + " · " + page.listenError
-                var f = page.listenFactor === 2 ? " · ×2" : (page.listenFactor === 0.5 ? " · ½" : "")
-                if (page.listenBpm > 0) return name + " · " + page.listenConfidence + " %" + f
-                return name + " …"
-            }
-            opacity: page.listenSource < 0 ? 0.5 : 0.9
-            font { pixelSize: Dims.l(6); family: "Noto Sans Condensed" }
-        }
-
-        // input level, so a silent source is visible at once
-        Rectangle {
-            anchors.top: listenLabel.bottom
-            anchors.topMargin: Dims.l(1.5)
-            anchors.horizontalCenter: parent.horizontalCenter
-            width:  listenLabel.width * Math.max(0.02, page.listenLevel)
-            height: Dims.l(0.8)
-            radius: height / 2
-            color:  page.pulseColor
-            visible: page.listenRunning
-            Behavior on width { NumberAnimation { duration: 150 } }
-        }
-
-        MouseArea {
-            anchors.fill: parent
-            anchors.margins: -Dims.l(3)
-            onClicked: {
-                var next = page.listenSource + 1
-                page.listenSourceSet(next >= page.listenSources.length ? -1 : next)
-            }
-        }
-    }
-
-    // ── Half / double (SailfishOS) ────────────────────────────────────────────
-    // The detector finds a pulse reliably, its metrical level less so: these
-    // halve or double what it reports, from then on until listening stops.
-    Repeater {
-        model: [ { label: "½", factor: 0.5, side: -1 }, { label: "×2", factor: 2.0, side: 1 } ]
         Item {
-            visible: listenControl.visible && page.listenSource >= 0
-            width:  Dims.l(11)
-            height: width
-            z: 5
-            x: parent.width / 2 + modelData.side * (listenControl.width / 2 + Dims.l(2)) - width / 2
-            y: listenControl.y + listenLabel.height / 2 - height / 2
-            readonly property bool on: page.listenFactor === modelData.factor
-            Rectangle {
-                anchors.fill: parent
-                radius: width / 2
-                color: parent.on ? page.pulseColor : "#000000"
-                opacity: parent.on ? 0.8 : 0.4
-            }
+            width: parent.width
+            height: listenLabel.height + Dims.l(3) + Dims.l(0.8)
+
             Label {
-                anchors.centerIn: parent
-                text: modelData.label
-                font { pixelSize: Dims.l(5.5); family: "Noto Sans Condensed"; weight: Font.Bold }
+                id: listenLabel
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.top: parent.top
+                text: {
+                    if (page.listenSource < 0)
+                        //% "Auto Detect"
+                        return qsTrId("id-auto-detect")
+                    var name = page.listenSources[page.listenSource]
+                    if (page.listenError !== "") return name + " · " + page.listenError
+                    if (page.listenBpm > 0) return name
+                    return name + " …"
+                }
+                opacity: page.listenSource < 0 ? 0.5 : 0.9
+                font { pixelSize: Dims.l(8); family: "Sail Sans Pro" }
             }
+
+            // input level, so a silent source is visible at once
+            Rectangle {
+                anchors.bottom: parent.bottom
+                anchors.horizontalCenter: parent.horizontalCenter
+                width:  listenLabel.width * Math.max(0.02, page.listenLevel)
+                height: Dims.l(0.8)
+                radius: height / 2
+                color:  page.pulseColor
+                visible: page.listenRunning
+                Behavior on width { NumberAnimation { duration: 150 } }
+            }
+
             MouseArea {
                 anchors.fill: parent
-                anchors.margins: -Dims.l(2)
-                // one step: x2 from ½ goes back to 1, x2 again from 1 gives 2
+                anchors.margins: -Dims.l(3)
                 onClicked: {
-                    var f = page.listenFactor * modelData.factor
-                    page.listenFactorSet(Math.max(0.5, Math.min(2.0, f)))
+                    var next = page.listenSource + 1
+                    page.listenSourceSet(next >= page.listenSources.length ? -1 : next)
                 }
+            }
+        }
+
+        // The detector finds the pulse reliably, its metrical level less so:
+        // a tap steps detected → double → half → detected; it holds until
+        // listening stops.
+        Label {
+            id: factorToggle
+            anchors.horizontalCenter: parent.horizontalCenter
+            visible: page.listenSource >= 0 && page.listenBpm > 0
+            text: page.listenFactor === 2
+                  //% "Double tempo"
+                  ? qsTrId("id-tempo-double")
+                  : page.listenFactor === 0.5
+                    //% "Half tempo"
+                    ? qsTrId("id-tempo-half")
+                    //% "Detected tempo"
+                    : qsTrId("id-tempo-detected")
+            color: page.listenFactor === 1 ? "#ffffff" : page.pulseColor
+            opacity: 0.9
+            font { pixelSize: Dims.l(8); family: "Sail Sans Pro" }
+
+            MouseArea {
+                anchors.fill: parent
+                anchors.margins: -Dims.l(3)
+                onClicked: page.listenFactorSet(page.listenFactor === 1 ? 2.0
+                                                : page.listenFactor === 2 ? 0.5 : 1.0)
             }
         }
     }

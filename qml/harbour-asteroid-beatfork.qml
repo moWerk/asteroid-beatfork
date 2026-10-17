@@ -22,103 +22,75 @@ import "game" as Game
 ApplicationWindow {
     id: app
 
+    // The watch has Noto Sans Condensed system wide; here it comes with the
+    // app. Qt files the three cuts as family "Noto Sans" with the styles
+    // "Condensed", "Condensed SemiBold" and "Condensed Bold", so they are
+    // asked for by family and styleName.
+    FontLoader { source: "game/fonts/NotoSans-Condensed.ttf" }
+    FontLoader { source: "game/fonts/NotoSans-CondensedSemiBold.ttf" }
+    FontLoader { source: "game/fonts/NotoSans-CondensedBold.ttf" }
+
     allowedOrientations: Orientation.Portrait
-
-    // The app lives in the page while it is in front. When it goes to the
-    // background the same scene is moved into the cover, scaled down, so
-    // the home screen tile shows it live.
-    property Item stageItem: null
-    property Item stageHome: null
-    property Item coverHolder: null
-
-    function placeStage() {
-        if (!stageItem) return
-        if (applicationActive || !coverHolder) {
-            if (stageItem.parent !== stageHome) {
-                stageItem.parent = stageHome
-                stageItem.scale = 1
-            }
-        } else {
-            stageItem.parent = coverHolder
-            stageItem.scale = Math.min(coverHolder.width / stageItem.width,
-                                       coverHolder.height / stageItem.height)
-        }
-    }
-
-    onApplicationActiveChanged: placeStage()
-    onCoverHolderChanged: placeStage()
 
     initialPage: Component {
         Page {
             id: page
 
-            // false: the play field fills the screen.
-            // true:  a square field as on a watch, centred.
-            property bool squareStage: false
-
             allowedOrientations: Orientation.Portrait
-            backNavigation: false
-            showNavigationIndicator: false
 
-            Rectangle {
+            Loader {
+                id: gameLoader
                 anchors.fill: parent
-                color: "black"
+                active: false
+                source: "game/main.qml"
             }
 
-            Item {
-                id: stage
-                property Item game: gameLoader.item
-                width: page.squareStage ? Math.min(page.width, page.height) : page.width
-                height: page.squareStage ? width : page.height
-                anchors.centerIn: parent
-                clip: true
-
-                Loader {
-                    id: gameLoader
-                    anchors.fill: parent
-                    active: false
-                    source: "game/main.qml"
-                }
-            }
-
-            Component.onCompleted: {
-                app.stageHome = page
-                app.stageItem = stage
-            }
-
-            // The game reads its scale once at start, so the size has to
-            // be known before it is loaded.
+            // The pages read their scale once at start, so the size has to
+            // be known before they are loaded. Laid out for a square watch:
+            // sizes follow the width.
             onStatusChanged: {
                 if (status === PageStatus.Active && !gameLoader.active) {
-                    Game.Dims.width = stage.width
-                    // laid out for a square watch: sizes follow the width
-                    Game.Dims.height = stage.width
+                    Game.Dims.width = page.width
+                    Game.Dims.height = page.width
                     gameLoader.active = true
                 }
             }
+
+            Binding { target: app; property: "game"; value: gameLoader.item }
         }
     }
 
+    property Item game: null
+
     cover: Component {
         CoverBackground {
-            Rectangle {
-                anchors.fill: parent
-                color: "black"
-            }
+            Column {
+                anchors.centerIn: parent
+                spacing: Theme.paddingSmall
 
-            // the play field is moved in here while the app is in the background
-            Item {
-                id: holder
-                anchors.fill: parent
-                clip: true
-                Component.onCompleted: app.coverHolder = holder
-                Component.onDestruction: app.coverHolder = null
+                Label {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: app.game ? app.game.bpm : ""
+                    color: Theme.highlightColor
+                    font { family: "Noto Sans"; styleName: "Condensed SemiBold"; pixelSize: Theme.fontSizeHuge * 1.5 }
+                }
+                Label {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: "BPM"
+                    color: Theme.secondaryHighlightColor
+                    font.pixelSize: Theme.fontSizeMedium
+                }
             }
 
             Label {
-                anchors.centerIn: parent
+                anchors {
+                    bottom: parent.bottom
+                    bottomMargin: Theme.paddingLarge
+                    horizontalCenter: parent.horizontalCenter
+                }
                 text: "BeatFork"
-                visible: !app.stageItem || app.stageItem.parent !== holder
+                color: Theme.secondaryColor
+                font.pixelSize: Theme.fontSizeSmall
             }
         }
     }

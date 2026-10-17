@@ -63,6 +63,11 @@ Item {
         onTriggered: page.settled = true
     }
 
+    // SailfishOS: the watch layout is a square; on the phone the buttons sit
+    // in the corners of a taller box, the spinner in its middle (mo, 2026-10-17).
+    readonly property real boxHeight: Math.min(height, width * 1.7)
+    function vh(p) { return boxHeight * p / 100 }
+
     // ── Edge indicators ───────────────────────────────────────────────────────
     Indicator { id: indicatorLeft;  edge: Qt.LeftEdge  }
     Indicator { id: indicatorRight; edge: Qt.RightEdge; visible: DeviceSpecs.hasSpeaker }
@@ -72,7 +77,7 @@ Item {
         anchors.left:                 parent.left
         anchors.leftMargin:           Dims.w(16)
         anchors.verticalCenter:       parent.verticalCenter
-        anchors.verticalCenterOffset: -Dims.h(24)
+        anchors.verticalCenterOffset: -page.vh(24)
         width: Dims.l(20); height: Dims.l(20)
         z: 2
 
@@ -126,7 +131,7 @@ Item {
         anchors.right:                parent.right
         anchors.rightMargin:          Dims.w(16)
         anchors.verticalCenter:       parent.verticalCenter
-        anchors.verticalCenterOffset: -Dims.h(24)
+        anchors.verticalCenterOffset: -page.vh(24)
         width: Dims.l(20); height: Dims.l(20)
         z: 2
 
@@ -174,7 +179,7 @@ Item {
         anchors.left:                 parent.left
         anchors.leftMargin:           Dims.w(16)
         anchors.verticalCenter:       parent.verticalCenter
-        anchors.verticalCenterOffset: Dims.h(24)
+        anchors.verticalCenterOffset: page.vh(24)
         width: Dims.l(20); height: Dims.l(20)
         visible: DeviceSpecs.hasSpeaker
         z: 2
@@ -227,7 +232,7 @@ Item {
         anchors.right:                parent.right
         anchors.rightMargin:          Dims.w(16)
         anchors.verticalCenter:       parent.verticalCenter
-        anchors.verticalCenterOffset: Dims.h(24)
+        anchors.verticalCenterOffset: page.vh(24)
         width: Dims.l(20); height: Dims.l(20)
         z: 2
 
@@ -304,7 +309,8 @@ Item {
         id: bpmSpinner
         anchors.centerIn: parent
         width:  Dims.w(40)
-        height: Dims.h(60)
+        // seven values instead of five (12 % of the width apart)
+        height: Dims.h(84)
         z: 1
         model: page.bpmModelCount
         currentIndex: {

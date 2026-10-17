@@ -31,6 +31,8 @@ Label {
     }
 
     text: zeroPadding(index)
+    // SailfishOS: 10 % larger than the Label default (mo, 2026-10-17)
+    font.pixelSize: Dims.l(7 * 1.1)
     horizontalAlignment: Text.AlignHCenter
     verticalAlignment: Text.AlignVCenter
 
