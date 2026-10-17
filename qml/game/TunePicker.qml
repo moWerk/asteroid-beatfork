@@ -40,8 +40,20 @@ BackgroundItem {
     }
 
     contentHeight: column.height + 2 * Theme.paddingLarge
-    height: menu.active ? menu.height + contentHeight : contentHeight
-    onClicked: menu.open(picker)
+    // follows the list as it opens and closes, as Silica's ComboBox does;
+    // switching back at once showed the closing list inside the picker
+    height: contentHeight + (menu.parent === menuAnchor ? menu.height : 0)
+    // The list opens on this anchor below the text, not on the picker:
+    // ContextMenu highlights its whole parent while it opens, which flashed
+    // over the label (mo, found in Benchymark 2026-10-17).
+    onClicked: menu.open(menuAnchor)
+
+    Item {
+        id: menuAnchor
+        y: picker.contentHeight
+        width: picker.width
+        height: picker.menu.parent === menuAnchor ? picker.menu.height : 0
+    }
 
     Column {
         id: column
